@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+DerivedData/
+*.xcworkspace
+
+# Swift
+*.swiftpm
+.swiftpm/
+.build/
+
+# Python
+__pycache__/
+*.py[cod]
+*.env
+*.venv
+env/
+venv/
