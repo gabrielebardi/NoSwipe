@@ -1,6 +1,20 @@
 # macOS
 .DS_Store
 
+# Python
+env/
+backend/env/
+__pycache__/
+*.py[cod]
+*.env
+*.venv
+venv/
+
+# iOS Build Files
+NoSwipeApp/build/
+NoSwipeApp/DerivedData/
+NoSwipeApp/.DS_Store
+
 # Xcode
 build/
 *.pbxuser
@@ -10,11 +24,29 @@ build/
 xcuserdata/
 DerivedData/
 *.xcworkspace
+*.xcuserstate
 
 # Swift
 *.swiftpm
 .swiftpm/
 .build/
+
+# Logs
+*.log
+
+# Sensitive Information
+*.key
+*.pem
+
+# Others
+*.swp
+
+
+
+
+
+
+
 
 # Python
 __pycache__/
