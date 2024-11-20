@@ -1,107 +1,133 @@
-//
-//  RegisterView.swift
-//  NoSwipeApp
-//
-//  Created by G B on 11/20/2024.
-//
-
 import SwiftUI
 
 struct RegisterView: View {
     @State private var username = ""
     @State private var email = ""
     @State private var password = ""
-    @State private var gender = ""
-    @State private var age = ""
-    @State private var location = ""
+    @State private var password2 = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
     @State private var successMessage = ""
     @State private var errorMessage = ""
-    
+    @State private var isLoading = false
+    @Environment(\.presentationMode) var presentationMode // To dismiss the view
+
     var body: some View {
-        VStack {
-            Text("Register")
-                .font(.largeTitle)
-                .padding()
-            
-            TextField("Username", text: $username)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding([.leading, .trailing, .bottom], 10)
-            
-            TextField("Email", text: $email)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding([.leading, .trailing, .bottom], 10)
-                .keyboardType(.emailAddress)
-                .autocapitalization(.none)
-            
-            SecureField("Password", text: $password)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding([.leading, .trailing, .bottom], 10)
-            
-            TextField("Gender", text: $gender)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding([.leading, .trailing, .bottom], 10)
-            
-            TextField("Age", text: $age)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding([.leading, .trailing, .bottom], 10)
-                .keyboardType(.numberPad)
-            
-            TextField("Location", text: $location)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding([.leading, .trailing, .bottom], 10)
-            
-            if !successMessage.isEmpty {
-                Text(successMessage)
-                    .foregroundColor(.green)
-                    .padding([.leading, .trailing, .bottom], 10)
-            }
-            
-            if !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .padding([.leading, .trailing, .bottom], 10)
-            }
-            
-            Button("Register") {
-                guard let ageInt = Int(age) else {
-                    self.errorMessage = "Please enter a valid age."
-                    return
+        ScrollView {
+            VStack(spacing: 20) {
+                Text("Register")
+                    .font(.largeTitle)
+                    .padding(.top, 40)
+
+                TextField("Username", text: $username)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+                
+                TextField("Email", text: $email)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+                    .keyboardType(.emailAddress)
+                    .autocapitalization(.none)
+
+                SecureField("Password", text: $password)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+
+                SecureField("Confirm Password", text: $password2)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+
+                TextField("First Name", text: $firstName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+
+                TextField("Last Name", text: $lastName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+
+                if !successMessage.isEmpty {
+                    Text(successMessage)
+                        .foregroundColor(.green)
+                        .padding(.horizontal)
                 }
-                NetworkManager.shared.register(
-                    username: username,
-                    email: email,
-                    password: password,
-                    gender: gender,
-                    age: ageInt,
-                    location: location
-                ) { result in
-                    DispatchQueue.main.async {
-                        switch result {
-                        case .success:
-                            self.successMessage = "Registration successful! Please log in."
-                            self.errorMessage = ""
-                        case .failure(let error):
-                            self.errorMessage = error.localizedDescription
-                            self.successMessage = ""
-                        }
-                    }
+
+                if !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                        .padding(.horizontal)
                 }
+
+                if isLoading {
+                    ProgressView("Registering...")
+                        .padding()
+                }
+
+                Button(action: {
+                    self.register()
+                }) {
+                    Text("Register")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(isLoading ? Color.gray : Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .padding(.horizontal)
+                .disabled(isLoading)
+
+                Spacer()
             }
-            .foregroundColor(.white)
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color.green)
-            .cornerRadius(8)
-            .padding([.leading, .trailing], 10)
-            
-            Spacer()
+            .padding(.bottom, 40)
         }
-        .padding()
+        .navigationBarTitle("Register", displayMode: .inline)
     }
 
-    struct RegisterView_Previews: PreviewProvider {
-        static var previews: some View {
-            RegisterView()
+    func register() {
+        guard !username.isEmpty,
+              !email.isEmpty,
+              !password.isEmpty,
+              !password2.isEmpty,
+              !firstName.isEmpty,
+              !lastName.isEmpty else {
+            self.errorMessage = "Please fill in all fields."
+            return
         }
+
+        guard password == password2 else {
+            self.errorMessage = "Passwords do not match."
+            return
+        }
+
+        self.isLoading = true
+        self.errorMessage = ""
+        self.successMessage = ""
+
+        NetworkManager.shared.register(username: username,
+                                       email: email,
+                                       password: password,
+                                       password2: password2,
+                                       firstName: firstName,
+                                       lastName: lastName) { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                switch result {
+                case .success:
+                    self.successMessage = "Registration successful! Redirecting to login..."
+                    // Delay to show the success message
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        self.presentationMode.wrappedValue.dismiss() // Dismiss to go back to LoginView
+                    }
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+}
+
+struct RegisterView_Previews: PreviewProvider {
+    static var previews: some View {
+        RegisterView()
     }
 }
