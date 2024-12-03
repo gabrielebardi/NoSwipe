@@ -4,7 +4,7 @@
 ### Features
 - User registration and onboarding:
   - Email/phone authentication.
-  - Calibration process with photo and interest ratings.
+  - Calibration process with ratings for photo and interest.
 - Basic matchmaking:
   - AI-driven compatibility scoring.
   - Daily connection batches with 5 prospects.

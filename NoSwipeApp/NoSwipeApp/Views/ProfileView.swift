@@ -8,13 +8,6 @@
 
 import SwiftUI
 
-struct UserProfile: Codable {
-    let username: String
-    let email: String
-    let gender: String?
-    let age: Int?
-    let location: String?
-}
 
 struct ProfileView: View {
     @State private var username = ""
@@ -90,98 +83,40 @@ struct ProfileView: View {
     }
     
     func fetchProfile() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/auth/user/") else { return }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        
-        // Retrieve token from Keychain
-        if let tokenData = KeychainHelper.shared.read(service: "NoSwipeApp", account: "authToken"),
-           let token = String(data: tokenData, encoding: .utf8) {
-            request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                DispatchQueue.main.async {
-                    self.errorMessage = error.localizedDescription
-                }
-                return
-            }
-            
-            guard let data = data else {
-                DispatchQueue.main.async {
-                    self.errorMessage = "No data received."
-                }
-                return
-            }
-            
-            do {
-                let user = try JSONDecoder().decode(UserProfile.self, from: data)
-                DispatchQueue.main.async {
+        NetworkManager.shared.fetchProfile { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let user):
                     self.username = user.username
                     self.email = user.email
                     self.gender = user.gender ?? ""
                     self.age = String(user.age ?? 0)
                     self.location = user.location ?? ""
-                }
-            } catch {
-                DispatchQueue.main.async {
+                case .failure(let error):
                     self.errorMessage = error.localizedDescription
                 }
             }
-        }.resume()
+        }
     }
     
     func updateProfile(username: String, email: String, gender: String, age: Int, location: String) {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/auth/user/") else { return }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Retrieve token from Keychain
-        if let tokenData = KeychainHelper.shared.read(service: "NoSwipeApp", account: "authToken"),
-           let token = String(data: tokenData, encoding: .utf8) {
-            request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        let body: [String: Any] = [
-            "username": username,
-            "email": email,
-            "gender": gender,
-            "age": age,
-            "location": location
-        ]
-        
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                DispatchQueue.main.async {
-                    self.errorMessage = error.localizedDescription
-                }
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Invalid response."
-                }
-                return
-            }
-            
-            if (200...299).contains(httpResponse.statusCode) {
-                DispatchQueue.main.async {
+        NetworkManager.shared.updateProfile(
+            username: username,
+            email: email,
+            gender: gender,
+            age: age,
+            location: location
+        ) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
                     self.successMessage = "Profile updated successfully."
                     self.errorMessage = ""
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Failed to update profile."
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
                 }
             }
-        }.resume()
+        }
     }
 }
 

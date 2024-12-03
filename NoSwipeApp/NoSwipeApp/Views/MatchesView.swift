@@ -70,8 +70,7 @@ struct MatchesView: View {
         request.httpMethod = "GET"
 
         // Retrieve token from Keychain
-        if let tokenData = KeychainHelper.shared.read(service: "NoSwipeApp", account: "authToken"),
-           let token = String(data: tokenData, encoding: .utf8) {
+        if let token = KeychainHelper.shared.readString(service: "NoSwipeApp", account: "authToken") {
             request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
         }
 

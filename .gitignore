@@ -26,6 +26,9 @@ DerivedData/
 *.xcworkspace
 *.xcuserstate
 
+# PoC
+PoC/
+
 # Swift
 *.swiftpm
 .swiftpm/
@@ -41,12 +44,11 @@ DerivedData/
 # Others
 *.swp
 
-
-
-
-
-
-
+*.pyc
+__pycache__/
+.env
+db.sqlite3
+/media/
 
 # Python
 __pycache__/

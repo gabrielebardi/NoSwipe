@@ -18,13 +18,10 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from core.views import RegisterView, LoginView, UserProfileView, LogoutView
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('core.urls')),  # Include core app URLs
-    path('api/auth/register/', RegisterView.as_view(), name='register'),
-    path('api/auth/login/', LoginView.as_view(), name='login'),
-    path('api/auth/logout/', LogoutView.as_view(), name='logout'),
-    path('api/auth/user-profile/', UserProfileView.as_view(), name='user-profile'),
-]
+    path('api/', include('core.urls')),  # This will prefix all core.urls with 'api/'
+] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

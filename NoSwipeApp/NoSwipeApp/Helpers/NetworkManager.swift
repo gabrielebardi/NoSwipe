@@ -1,46 +1,206 @@
-// /Users/gb/Desktop/Code/noswipe-app/NoSwipeApp/NoSwipeApp/Helpers/NetworkManager.swift
-
 import Foundation
 
-// MARK: - NetworkManager
+// MARK: - Response Types
+struct LoginResponse: Codable {
+    let token: String
+}
 
+struct Photo: Codable {
+    let id: Int
+    let image_url: String
+}
+
+struct ServerError: Codable {
+    let detail: String
+}
+
+struct EmptyResponse: Codable {}
+
+struct CalibrationStatus: Codable {
+    let isCalibrated: Bool
+}
+
+// MARK: - NetworkError
+enum NetworkError: Error {
+    case invalidURL
+    case networkError(Error)
+    case invalidResponse
+    case statusCode(Int)
+    case serverError(message: String)
+    case noData
+    case decodingFailed
+    
+    var localizedDescription: String {
+        switch self {
+        case .invalidURL: return "Invalid URL."
+        case .networkError(let error): return "Network error: \(error.localizedDescription)"
+        case .invalidResponse: return "Invalid response from server."
+        case .statusCode(let code): return "Server responded with status code \(code)."
+        case .serverError(let message): return "Server error: \(message)"
+        case .noData: return "No data received from server."
+        case .decodingFailed: return "Failed to decode server response."
+        }
+    }
+}
+
+// MARK: - NetworkManager
 class NetworkManager {
-    // Singleton instance
     static let shared = NetworkManager()
+    private var isCheckingServers = false
     
-    // Base URL of the backend
-    private let baseURL = "http://192.168.1.123:8000" // Update if necessary
+    var baseURL: String {
+        AppConfig.currentServerURL
+    }
     
-    // Keychain service and account identifiers
     private let tokenService = "NoSwipeApp"
     private let tokenAccount = "authToken"
     
-    // MARK: - Authentication Token
-    
-    var authToken: String? {
-        return KeychainHelper.shared.read(service: tokenService, account: tokenAccount)
-            .flatMap { String(data: $0, encoding: .utf8) }
+    private init() {
+        checkAvailableServers()
     }
     
-    // MARK: - Registration
+    var authToken: String? {
+        return KeychainHelper.shared.readString(service: tokenService, account: tokenAccount)
+    }
     
-    func register(username: String,
-                  email: String,
-                  password: String,
-                  password2: String,
-                  firstName: String,
-                  lastName: String,
-                  completion: @escaping (Result<Void, NetworkError>) -> Void) {
+    // MARK: - Server Checking Methods
+    func checkAvailableServers() {
+        guard !isCheckingServers else { return }
+        isCheckingServers = true
         
-        guard let url = URL(string: "\(baseURL)/api/auth/register/") else {
+        // Try each server URL sequentially instead of in parallel
+        func tryNextServer(_ index: Int) {
+            guard index < AppConfig.serverURLs.count else {
+                self.isCheckingServers = false
+                return
+            }
+            
+            let serverURL = AppConfig.serverURLs[index]
+            checkServer(url: serverURL) { isAvailable in
+                if isAvailable {
+                    AppConfig.currentServerURL = serverURL
+                    self.isCheckingServers = false
+                } else {
+                    tryNextServer(index + 1)
+                }
+            }
+        }
+        
+        tryNextServer(0)
+    }
+    
+    private func checkServer(url: String, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: "\(url)/api/health-check/") else {
+            completion(false)
+            return
+        }
+        
+        let task = URLSession.shared.dataTask(with: url) { _, response, _ in
+            if let httpResponse = response as? HTTPURLResponse,
+               (200...299).contains(httpResponse.statusCode) {
+                print("Successfully connected to server: \(url)")
+                completion(true)
+            } else {
+                print("Failed to connect to server: \(url)")
+                completion(false)
+            }
+        }
+        task.resume()
+    }
+    
+    // MARK: - API Methods
+    func checkCalibrationStatus(completion: @escaping (Result<CalibrationStatus, NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/user/calibration-status/"
+        guard let request = makeRequest(url: endpoint, method: "GET") else {
+            completion(Result.failure(NetworkError.invalidURL))
+            return
+        }
+        performRequest(request as URLRequest, completion: completion)
+    }
+    
+    func fetchCalibrationPhotos(gender: String, completion: @escaping (Result<[Photo], NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/photos?gender=\(gender)"
+        guard let request = makeRequest(url: endpoint, method: "GET") else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        performRequest(request, completion: completion)
+    }
+    
+    func submitPhotoRating(photoId: Int, rating: Int, completion: @escaping (Result<Void, NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/photos/\(photoId)/rate"
+        let body = ["rating": rating]
+        
+        guard let request = makeRequest(url: endpoint, method: "POST", body: body) else {
             completion(.failure(.invalidURL))
             return
         }
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        performRequest(request) { (result: Result<EmptyResponse, NetworkError>) in
+            completion(result.map { _ in () })
+        }
+    }
+    
+    func trainUserModel(userId: String, completion: @escaping (Result<Void, NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/train-ai/\(userId)"
+        guard let request = makeRequest(url: endpoint, method: "POST") else {
+            completion(.failure(.invalidURL))
+            return
+        }
         
+        performRequest(request) { (result: Result<EmptyResponse, NetworkError>) in
+            completion(result.map { _ in () })
+        }
+    }
+    
+    func fetchProfile(completion: @escaping (Result<UserProfile, NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/auth/user/"
+        guard let request = makeRequest(url: endpoint, method: "GET") else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        performRequest(request, completion: completion)
+    }
+    
+    func updateProfile(username: String, email: String, gender: String, age: Int, location: String, 
+                      completion: @escaping (Result<Void, NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/auth/user/"
+        let body: [String: Any] = [
+            "username": username,
+            "email": email,
+            "gender": gender,
+            "age": age,
+            "location": location
+        ]
+        
+        guard let request = makeRequest(url: endpoint, method: "PUT", body: body) else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        
+        performRequest(request) { (result: Result<EmptyResponse, NetworkError>) in
+            completion(result.map { _ in () })
+        }
+    }
+    
+    // MARK: - Authentication Methods
+    func login(email: String, password: String, completion: @escaping (Result<String, NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/auth/login/"
+        let body = ["email": email, "password": password]
+        
+        guard let request = makeRequest(url: endpoint, method: "POST", body: body) else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        
+        performRequest(request) { (result: Result<LoginResponse, NetworkError>) in
+            completion(result.map { $0.token })
+        }
+    }
+    
+    func register(username: String, email: String, password: String, password2: String,
+                 firstName: String, lastName: String, completion: @escaping (Result<Void, NetworkError>) -> Void) {
+        let endpoint = "\(baseURL)/api/auth/register/"
         let body: [String: Any] = [
             "username": username,
             "email": email,
@@ -50,105 +210,40 @@ class NetworkManager {
             "last_name": lastName
         ]
         
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        } catch {
-            completion(.failure(.invalidBody))
-            return
-        }
-        
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in            if let error = error {
-                completion(.failure(.networkError(error)))
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completion(.failure(.invalidResponse))
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                if let data = data,
-                   let serverError = try? JSONDecoder().decode(ServerError.self, from: data) {
-                    completion(.failure(.serverError(message: serverError.detail)))
-                } else {
-                    completion(.failure(.statusCode(httpResponse.statusCode)))
-                }
-                return
-            }
-            
-            completion(.success(()))
-        }
-        
-        task.resume()
-    }
-    
-    // MARK: - Login
-    func login(email: String,
-               password: String,
-               completion: @escaping (Result<String, NetworkError>) -> Void) {
-        guard let url = URL(string: "\(baseURL)/api/auth/login/") else {
+        guard let request = makeRequest(url: endpoint, method: "POST", body: body) else {
             completion(.failure(.invalidURL))
             return
         }
         
+        performRequest(request) { (result: Result<EmptyResponse, NetworkError>) in
+            completion(result.map { _ in () })
+        }
+    }
+    
+    // MARK: - Helper Methods
+    private func makeRequest(url: String, method: String, body: [String: Any]? = nil) -> URLRequest? {
+        guard let url = URL(string: url) else { return nil }
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = [
-            "email": email,
-            "password": password
-        ]
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        } catch {
-            completion(.failure(.invalidBody))
-            return
+        if let token = authToken {
+            request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                completion(.failure(.networkError(error)))
-                return
+        if let body = body {
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+            } catch {
+                print("Error encoding request body: \(error.localizedDescription)")
+                return nil
             }
-            
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode),
-                  let data = data else {
-                completion(.failure(.invalidResponse))
-                return
-            }
-            
-            guard let loginResponse = try? JSONDecoder().decode(LoginSuccess.self, from: data) else {
-                completion(.failure(.decodingFailed))
-                return
-            }
-            
-            completion(.success(loginResponse.token)) // Pass the token back
         }
         
-        task.resume()
+        return request
     }
     
-    // MARK: - Fetch User Profile
-    
-    func fetchUserProfile(completion: @escaping (Result<UserProfileData, NetworkError>) -> Void) {
-        guard let token = authToken else {
-            completion(.failure(.notAuthenticated))
-            return
-        }
-        
-        guard let url = URL(string: "\(baseURL)/api/user/profile/") else {
-            completion(.failure(.invalidURL))
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
-        
+    private func performRequest<T: Decodable>(_ request: URLRequest, completion: @escaping (Result<T, NetworkError>) -> Void) {
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
                 completion(.failure(.networkError(error)))
@@ -170,118 +265,18 @@ class NetworkManager {
                 return
             }
             
-            guard let data = data,
-                  let userProfile = try? JSONDecoder().decode(UserProfileData.self, from: data) else {
+            guard let data = data else {
+                completion(.failure(.noData))
+                return
+            }
+            
+            do {
+                let decodedData = try JSONDecoder().decode(T.self, from: data)
+                completion(.success(decodedData))
+            } catch {
                 completion(.failure(.decodingFailed))
-                return
             }
-            
-            completion(.success(userProfile))
         }
-        
         task.resume()
-    }
-    
-    // MARK: - Logout
-    
-    func logout(completion: @escaping (Result<Void, NetworkError>) -> Void) {
-        guard let token = authToken else {
-            completion(.failure(.notAuthenticated))
-            return
-        }
-        
-        guard let url = URL(string: "\(baseURL)/api/auth/logout/") else {
-            completion(.failure(.invalidURL))
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
-        
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self else { return }
-            if let error = error {
-                completion(.failure(.networkError(error)))
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completion(.failure(.invalidResponse))
-                return
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                if let data = data,
-                   let serverError = try? JSONDecoder().decode(ServerError.self, from: data) {
-                    completion(.failure(.serverError(message: serverError.detail)))
-                } else {
-                    completion(.failure(.statusCode(httpResponse.statusCode)))
-                }
-                return
-            }
-            
-            KeychainHelper.shared.delete(service: self.tokenService, account: self.tokenAccount)
-            completion(.success(()))
-        }
-        
-        task.resume()
-    }
-}
-
-// MARK: - Supporting Structures and Enums
-
-// Struct to decode server error messages
-struct ServerError: Codable {
-    let detail: String
-}
-
-// Struct to decode successful login response
-struct LoginSuccess: Codable {
-    let token: String
-}
-
-// Renamed struct to avoid conflict
-struct UserProfileData: Codable {
-    let username: String
-    let email: String
-    let first_name: String
-    let last_name: String
-    // Add other profile fields as needed
-}
-
-// Enum to handle different network errors
-enum NetworkError: Error, LocalizedError {
-    case invalidURL
-    case invalidBody
-    case networkError(Error)
-    case invalidResponse
-    case statusCode(Int)
-    case serverError(message: String)
-    case decodingFailed
-    case notAuthenticated
-    case unknown // Added to ensure switch exhaustiveness
-    
-    var errorDescription: String? {
-        switch self {
-        case .invalidURL:
-            return "The URL is invalid."
-        case .invalidBody:
-            return "Failed to encode the request body."
-        case .networkError(let error):
-            return error.localizedDescription
-        case .invalidResponse:
-            return "Received an invalid response from the server."
-        case .statusCode(let code):
-            return "Received HTTP status code \(code)."
-        case .serverError(let message):
-            return "Server error: \(message)"
-        case .decodingFailed:
-            return "Failed to decode the response."
-        case .notAuthenticated:
-            return "User is not authenticated."
-        case .unknown:
-            return "An unknown error occurred."
-        }
     }
 }

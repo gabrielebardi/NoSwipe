@@ -10,11 +10,33 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+# settings.py
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+
+SECRET_KEY = os.getenv('SECRET_KEY')
+DEBUG = os.getenv('DEBUG') == 'True'
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1, localhost, 192.168.1.214').split(', ')
+
+# API Keys
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+AZURE_COMPUTER_VISION_KEY = os.getenv('AZURE_COMPUTER_VISION_KEY')
+AZURE_COMPUTER_VISION_ENDPOINT = os.getenv('AZURE_COMPUTER_VISION_ENDPOINT')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -29,12 +51,14 @@ DEBUG = True
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8000',  # For local development
-    'https://192.168.1.123:8000',
-    'http://localhost:8000',  # Alternate local access
+    'https://192.168.1.123:8000', #Ceci IP
+    'https://192.168.1.214:8000',
+    'http://localhost:8000',
+    'http://localhost:3000',
 ]
 CSRF_FAILURE_VIEW = 'django.views.csrf.csrf_failure'
 
-ALLOWED_HOSTS = ['192.168.1.123', 'localhost', '127.0.0.1']  
+ALLOWED_HOSTS = ['192.168.1.123', 'localhost', '127.0.0.1','192.168.1.214']  
 
 # Application definition
 
@@ -82,11 +106,19 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True  # Only for development
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_HTTPONLY = False
+SESSION_COOKIE_HTTPONLY = True
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://192.168.1.123:3000",
-    # Add other origins as needed
+    "https://192.168.1.214:3000",
+        # Add other origins as needed
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -168,3 +200,13 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',  # Optional, for web session support
     ],
 }
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CSRF_COOKIE_SECURE = False  # Set to True in production
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_HTTPONLY = False

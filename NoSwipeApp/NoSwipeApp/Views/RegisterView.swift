@@ -103,12 +103,14 @@ struct RegisterView: View {
         self.errorMessage = ""
         self.successMessage = ""
 
-        NetworkManager.shared.register(username: username,
-                                       email: email,
-                                       password: password,
-                                       password2: password2,
-                                       firstName: firstName,
-                                       lastName: lastName) { result in
+        NetworkManager.shared.register(
+            username: username,
+            email: email,
+            password: password,
+            password2: password2,
+            firstName: firstName,
+            lastName: lastName
+        ) { result in
             DispatchQueue.main.async {
                 self.isLoading = false
                 switch result {

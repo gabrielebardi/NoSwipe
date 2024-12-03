@@ -71,12 +71,9 @@ struct LoginView: View {
                 self.isLoading = false
                 switch result {
                 case .success(let token):
-                    self.token = token // Now this will work if the return type matches
-                    self.isLoggedIn = true
                     // Save token to Keychain
-                    if let tokenData = token.data(using: .utf8) {
-                        KeychainHelper.shared.save(tokenData, service: "NoSwipeApp", account: "authToken")
-                    }
+                    KeychainHelper.shared.saveString(token, service: "NoSwipeApp", account: "authToken")
+                    self.isLoggedIn = true
                 case .failure(let error):
                     self.errorMessage = error.localizedDescription
                 }
