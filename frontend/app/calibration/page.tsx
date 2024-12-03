@@ -3,15 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/services/api';
-
-interface Photo {
-  id: number;
-  image_url: string;
-}
+import { CalibrationPhoto } from '@/types';
 
 export default function CalibrationPage() {
   const router = useRouter();
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [photos, setPhotos] = useState<CalibrationPhoto[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [ratings, setRatings] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,8 +15,21 @@ export default function CalibrationPage() {
   const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
-    fetchPhotos();
+    checkAuth();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      const isAuthenticated = await apiService.checkAuth();
+      if (!isAuthenticated) {
+        router.push('/auth/login');
+        return;
+      }
+      fetchPhotos();
+    } catch (error) {
+      router.push('/auth/login');
+    }
+  };
 
   const fetchPhotos = async () => {
     try {
@@ -37,6 +46,12 @@ export default function CalibrationPage() {
   const handleRating = async (rating: number) => {
     try {
       await apiService.submitPhotoRating(photos[currentIndex].id, rating);
+      
+      // Update ratings array
+      const newRatings = [...ratings];
+      newRatings[currentIndex] = rating;
+      setRatings(newRatings);
+      
       if (currentIndex + 1 >= photos.length) {
         setIsCompleted(true);
         await apiService.trainUserModel();
@@ -50,44 +65,66 @@ export default function CalibrationPage() {
   };
 
   if (isLoading) {
-    return <div className="text-center p-8">Loading calibration photos...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="text-white text-xl">Loading calibration photos...</div>
+      </div>
+    );
   }
 
   if (errorMessage) {
-    return <div className="text-center text-red-500 p-8">{errorMessage}</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="text-red-400 text-center p-8 bg-red-900/50 rounded-lg">
+          {errorMessage}
+        </div>
+      </div>
+    );
   }
 
   if (photos.length === 0) {
-    return <div className="text-center p-8">No photos available for calibration.</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="text-white text-xl">No photos available for calibration.</div>
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Photo Calibration</h1>
-      <div className="max-w-md mx-auto">
-        {!isCompleted && currentIndex < photos.length && (
-          <>
-            <img 
-              src={photos[currentIndex].image_url} 
-              alt={`Calibration photo ${currentIndex + 1}`}
-              className="w-full h-auto rounded-lg shadow-lg mb-4"
-            />
-            <div className="flex justify-between gap-2">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => (
-                <button
-                  key={rating}
-                  onClick={() => handleRating(rating)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                >
-                  {rating}
-                </button>
-              ))}
-            </div>
-            <div className="text-center mt-4">
-              Photo {currentIndex + 1} of {photos.length}
-            </div>
-          </>
-        )}
+    <div className="min-h-screen bg-slate-900 py-8">
+      <div className="container mx-auto px-4">
+        <h1 className="text-3xl font-bold text-white text-center mb-8">
+          Rate Your Preferences
+        </h1>
+        <div className="max-w-md mx-auto bg-slate-800 rounded-xl shadow-lg p-6">
+          {!isCompleted && currentIndex < photos.length && (
+            <>
+              <img 
+                src={photos[currentIndex].image_url} 
+                alt={`Calibration photo ${currentIndex + 1}`}
+                className="w-full h-auto rounded-lg shadow-lg mb-6"
+              />
+              <div className="grid grid-cols-5 gap-2 mb-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => (
+                  <button
+                    key={rating}
+                    onClick={() => handleRating(rating)}
+                    className={`px-4 py-3 ${
+                      ratings[currentIndex] === rating 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                    } rounded-lg transition-colors`}
+                  >
+                    {rating}
+                  </button>
+                ))}
+              </div>
+              <div className="text-center text-slate-400">
+                Photo {currentIndex + 1} of {photos.length}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

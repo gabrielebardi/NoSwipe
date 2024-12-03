@@ -13,9 +13,10 @@ from tensorflow.keras.preprocessing import image as keras_image
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.linear_model import Ridge
 from sklearn.decomposition import PCA
-from app import db, app
-from models import Rating, UserPreferences, Photo
+from django.conf import settings
+from core.models import Rating, UserPreferences, Photo
 from openai import OpenAI
+import tensorflow as tf
 
 # Load environment variables
 load_dotenv()
@@ -86,7 +87,7 @@ def train_user_model(user_id):
 
     X, y = [], []
     for rating in ratings:
-        img_path = os.path.join(app.static_folder, rating.image_filename.lstrip("/"))
+        img_path = os.path.join(settings.STATIC_ROOT, rating.image_filename.lstrip("/"))
         if not os.path.isfile(img_path):
             print(f"Invalid image file: {img_path}")
             continue
@@ -123,7 +124,7 @@ def train_user_model(user_id):
     # Save both the PCA and the model
     model_data = {"pca": pca, "model": model}
     # Ensure the model path is correct and overwrite existing model
-    model_dir = os.path.join(app.root_path, "user_models")
+    model_dir = os.path.join(settings.BASE_DIR, "user_models")
     os.makedirs(model_dir, exist_ok=True)
     model_path = os.path.join(model_dir, f"model_{user_id}.pkl")
 
@@ -134,7 +135,7 @@ def train_user_model(user_id):
 
 def process_images(image_paths, user):
     """Process images to predict ratings and generate a pickup line."""
-    model_path = os.path.join(app.root_path, "user_models", f"model_{user.id}.pkl")
+    model_path = os.path.join(settings.BASE_DIR, "user_models", f"model_{user.id}.pkl")
     if not os.path.exists(model_path):
         return {"success": False, "message": "User model not found. Please recalibrate."}
 

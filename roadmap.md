@@ -40,6 +40,7 @@
   - Tips like "Rating more accurately improves your matches."
 - Dynamic learning:
   - Improve matchmaking using feedback from successful connections (>6 messages exchanged).
+- implement a caching system for frequently accessed user models to improve performance
 
 ---
 

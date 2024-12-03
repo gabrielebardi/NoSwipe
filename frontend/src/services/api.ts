@@ -1,4 +1,4 @@
-import { UserProfile, Match, Photo } from '@/types';
+import { UserProfile, Match, Photo, CalibrationPhoto } from '@/types';
 
 class ApiService {
   private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -51,11 +51,10 @@ class ApiService {
         body: JSON.stringify({ email, password })
       });
 
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          detail: 'Login failed. Please check your credentials.'
-        }));
-        throw new Error(errorData.detail || 'Login failed');
+        throw new Error(data.detail || 'Login failed');
       }
 
       return response;
@@ -95,11 +94,11 @@ class ApiService {
     if (!response.ok) throw new Error('Failed to update profile');
   }
 
-  async getCalibrationPhotos(gender: string): Promise<any> {
+  async getCalibrationPhotos(gender: string): Promise<CalibrationPhoto[]> {
     try {
       const csrfToken = await this.getCsrfToken();
       const response = await fetch(
-        `${this.baseUrl}/api/photos/?gender=${gender}&count=30`,
+        `${this.baseUrl}/api/photos/`,
         {
           credentials: 'include',
           headers: {
@@ -116,10 +115,7 @@ class ApiService {
         throw new Error(errorData.detail || 'Failed to fetch calibration photos');
       }
 
-      const data = await response.json();
-      console.log('Calibration photos response:', data);
-      return data;
-
+      return response.json();
     } catch (error) {
       console.error('Error fetching calibration photos:', error);
       throw error instanceof Error ? error : new Error('Failed to fetch calibration photos');
@@ -137,17 +133,31 @@ class ApiService {
       credentials: 'include',
       body: JSON.stringify({ rating })
     });
-    if (!response.ok) throw new Error('Failed to submit rating');
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({
+        detail: 'Failed to submit rating'
+      }));
+      throw new Error(errorData.detail || 'Failed to submit rating');
+    }
   }
 
   async trainUserModel(): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/api/user/train-model/`, {
+    const csrfToken = await this.getCsrfToken();
+    const response = await fetch(`${this.baseUrl}/api/user/calibrate/`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken || '',
+      },
       credentials: 'include',
     });
 
     if (!response.ok) {
-      throw new Error('Failed to train user model');
+      const errorData = await response.json().catch(() => ({
+        detail: 'Failed to train user model'
+      }));
+      throw new Error(errorData.detail || 'Failed to train user model');
     }
   }
 

@@ -18,26 +18,28 @@ export default function LoginPage() {
   
     try {
       const response = await apiService.login(email, password);
-      const data = await response.json();
-      if (response.ok) {
-        // Check if user needs calibration
-        const calibrationResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/user/calibration-status/`,
-          {
-            credentials: 'include',
-          }
-        );
-        const calibrationData = await calibrationResponse.json();
-        
-        if (calibrationData.isCalibrated) {
-          router.push('/matches');
-        } else {
-          router.push('/calibration');
+      
+      // Check if user needs calibration
+      const calibrationResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/user/calibration-status/`,
+        {
+          credentials: 'include',
         }
+      );
+      
+      if (!calibrationResponse.ok) {
+        throw new Error('Failed to check calibration status');
+      }
+      
+      const calibrationData = await calibrationResponse.json();
+      
+      if (calibrationData.isCalibrated) {
+        router.push('/matches');
       } else {
-        throw new Error(data.error || 'Login failed');
+        router.push('/calibration');
       }
     } catch (error) {
+      console.error('Login error:', error);
       setErrorMessage(
         error instanceof Error 
           ? error.message 
