@@ -1,33 +1,47 @@
-interface User {
+export interface User {
   id: number;
   username: string;
   email: string;
   first_name: string;
   last_name: string;
   birth_date?: string;
-  gender?: string;
-  location?: string;
+  gender?: 'M' | 'F' | 'O';
+  age?: number;
+  location?: Location;
   bio?: string;
   is_active: boolean;
   date_joined: string;
   last_login?: string;
+  onboarding_completed: boolean;
 }
 
-interface UserProfile extends User {
+export interface Location {
+  id: number;
+  type: 'postal_code' | 'city' | 'region' | 'country';
+  postal_code?: string;
+  city?: string;
+  region?: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  display_name: string;
+}
+
+export interface UserProfile extends User {
   interests: string[];
   photos: Photo[];
   preferences: UserPreferences;
 }
 
-interface UserPreferences {
-  preferred_gender?: string;
-  preferred_age_min?: number;
-  preferred_age_max?: number;
-  preferred_location?: string;
-  max_distance?: number;
+export interface UserPreferences {
+  preferred_gender: 'M' | 'F' | 'B';
+  preferred_age_min: number;
+  preferred_age_max: number;
+  preferred_location: Location;
+  max_distance: number;
 }
 
-interface Photo {
+export interface Photo {
   id: number;
   user: number;
   image_url: string;
@@ -35,7 +49,7 @@ interface Photo {
   is_profile_photo: boolean;
 }
 
-interface Match {
+export interface Match {
   id: number;
   user1: number;
   user2: number;
@@ -45,23 +59,36 @@ interface Match {
   status: 'pending' | 'accepted' | 'rejected';
 }
 
-interface CalibrationPhoto {
+export interface CalibrationPhoto {
   id: number;
   image_url: string;
 }
 
-interface UserInterest {
+export interface UserInterest {
   user: number;
   interest: string;
   rating: number;
 }
 
-export type { 
-  User, 
-  UserProfile, 
-  UserPreferences, 
-  Photo, 
-  Match, 
-  CalibrationPhoto,
-  UserInterest 
-}; 
+export interface AuthResponse {
+  token: string;
+  user: UserProfile;
+}
+
+export interface ApiError {
+  detail: string;
+  code?: string;
+  errors?: Record<string, string[]>;
+}
+
+export interface LocationSearchResult {
+  id: number;
+  type: 'postal_code' | 'city' | 'region' | 'country';
+  postal_code?: string;
+  city?: string;
+  region?: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  display_name: string;
+}

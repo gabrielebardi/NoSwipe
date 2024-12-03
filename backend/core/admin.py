@@ -2,57 +2,42 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import (
-    User, UserPreference, Photo, Interest,
-    UserInterest, Match, Interaction, UserModel
-)
+from .models import User, UserPreference, Photo, Match
 
-@admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'gender', 'location', 'is_premium')
-    list_filter = ('is_premium', 'gender', 'location')
-    fieldsets = UserAdmin.fieldsets + (
-        ('Dating Profile', {'fields': ('gender', 'birth_date', 'location', 'is_premium')}),
+    list_display = ('email', 'first_name', 'last_name', 'gender', 'birth_date', 'calibration_completed')
+    list_filter = ('gender', 'calibration_completed')
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name', 'birth_date', 'gender', 'location', 'bio', 'profile_photo')}),
+        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'password1', 'password2'),
+        }),
+    )
+    search_fields = ('email', 'first_name', 'last_name')
+    ordering = ('email',)
 
-@admin.register(UserPreference)
 class UserPreferenceAdmin(admin.ModelAdmin):
-    list_display = ('user', 'min_age', 'max_age', 'preferred_gender', 'location_preference')
+    list_display = ('user', 'preferred_gender', 'preferred_age_min', 'preferred_age_max', 'max_distance')
     list_filter = ('preferred_gender',)
-    search_fields = ('user__username', 'location_preference')
+    search_fields = ('user__email',)
 
-@admin.register(Photo)
 class PhotoAdmin(admin.ModelAdmin):
-    list_display = ('user', 'file_path', 'upload_date', 'is_profile_photo')
-    list_filter = ('is_profile_photo', 'upload_date')
-    search_fields = ('user__username',)
+    list_display = ('image_url', 'gender', 'age', 'ethnicity', 'created_at')
+    list_filter = ('gender', 'created_at')
+    search_fields = ('image_url', 'ethnicity')
 
-@admin.register(Interest)
-class InterestAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category')
-    list_filter = ('category',)
-    search_fields = ('name', 'category')
-
-@admin.register(UserInterest)
-class UserInterestAdmin(admin.ModelAdmin):
-    list_display = ('user', 'interest', 'rating')
-    list_filter = ('interest__category',)
-    search_fields = ('user__username', 'interest__name')
-
-@admin.register(Match)
 class MatchAdmin(admin.ModelAdmin):
-    list_display = ('user1', 'user2', 'score', 'created_at', 'expires_at')  # Updated fields
-    list_filter = ('created_at', 'expires_at')
-    search_fields = ('user1__username', 'user2__username')
+    list_display = ('user', 'matched_user', 'compatibility_score', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('user__email', 'matched_user__email')
 
-@admin.register(Interaction)
-class InteractionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'target', 'interaction_type', 'created_at')  # Updated field
-    list_filter = ('interaction_type', 'created_at')
-    search_fields = ('user__username', 'target__username')
-
-@admin.register(UserModel)
-class UserModelAdmin(admin.ModelAdmin):
-    list_display = ('user', 'last_updated')  # Updated fields
-    list_filter = ('last_updated',)
-    search_fields = ('user__username',)
+admin.site.register(User, CustomUserAdmin)
+admin.site.register(UserPreference, UserPreferenceAdmin)
+admin.site.register(Photo, PhotoAdmin)
+admin.site.register(Match, MatchAdmin)

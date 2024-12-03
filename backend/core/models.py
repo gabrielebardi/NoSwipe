@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 import numpy as np
+from django.utils import timezone
 
 class User(AbstractUser):
     """Extended user model with dating app specific fields."""
@@ -16,48 +17,58 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
-    location = models.CharField(max_length=100, null=True, blank=True)
-    is_premium = models.BooleanField(default=False)
-    last_active = models.DateTimeField(auto_now=True)
+    location = models.JSONField(null=True, blank=True)
+    bio = models.TextField(max_length=500, blank=True)
+    profile_photo = models.URLField(max_length=500, blank=True)
+    calibration_completed = models.BooleanField(default=False)
     
     class Meta:
         db_table = 'users'
 
+    def __str__(self):
+        return self.email
+
 class UserPreference(models.Model):
     """User preferences for matching."""
     GENDER_CHOICES = [
-        ('M', 'Man'),
-        ('W', 'Woman'),
-        ('NB', 'Non-Binary')
+        ('M', 'Male'),
+        ('F', 'Female'),
+        ('B', 'Both'),
     ]
     
     user = models.OneToOneField('core.User', on_delete=models.CASCADE, related_name='preferences')
-    min_age = models.IntegerField(validators=[MinValueValidator(18)])
-    max_age = models.IntegerField(validators=[MinValueValidator(18)])
-    preferred_gender = models.CharField(max_length=2, choices=GENDER_CHOICES)
-    location_preference = models.CharField(max_length=100)
+    preferred_gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
+    preferred_age_min = models.IntegerField(null=True, blank=True)
+    preferred_age_max = models.IntegerField(null=True, blank=True)
+    preferred_location = models.JSONField(null=True, blank=True)
+    max_distance = models.IntegerField(default=50)  # in kilometers
     
     class Meta:
         db_table = 'user_preferences'
 
+    def __str__(self):
+        return f"{self.user.email}'s preferences"
+
 class Photo(models.Model):
     """User photos."""
-    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='photos')
-    file_path = models.CharField(max_length=255)
-    upload_date = models.DateTimeField(auto_now_add=True)
-    is_profile_photo = models.BooleanField(default=False)
-    feature_vector = models.BinaryField(null=True)  # Stored as numpy array
+    GENDER_CHOICES = [
+        ('M', 'Male'),
+        ('F', 'Female'),
+        ('O', 'Other'),
+    ]
     
-    def set_features(self, features):
-        """Store numpy array as binary."""
-        self.feature_vector = features.tobytes()
-    
-    def get_features(self):
-        """Retrieve numpy array from binary."""
-        return np.frombuffer(self.feature_vector)
+    image_url = models.URLField(max_length=500)
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
+    age = models.IntegerField()
+    ethnicity = models.CharField(max_length=50, blank=True)
+    features = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         db_table = 'photos'
+
+    def __str__(self):
+        return f"{self.gender} - {self.age} years old"
 
 class Interest(models.Model):
     """Available interests that users can rate."""
@@ -81,15 +92,25 @@ class UserInterest(models.Model):
 
 class Match(models.Model):
     """Matches between users."""
-    user1 = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='matches_as_user1')
-    user2 = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='matches_as_user2')
-    score = models.FloatField()
+    STATUS_CHOICES = [
+        ('P', 'Pending'),
+        ('A', 'Accepted'),
+        ('R', 'Rejected'),
+    ]
+    
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='matches_as_user')
+    matched_user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='matches_as_matched')
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default='P')
+    compatibility_score = models.FloatField()
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'matches'
-        unique_together = ['user1', 'user2']
+        unique_together = ['user', 'matched_user']
+
+    def __str__(self):
+        return f"{self.user.email} - {self.matched_user.email} ({self.get_status_display()})"
 
 class Interaction(models.Model):
     """User interactions with matches."""
