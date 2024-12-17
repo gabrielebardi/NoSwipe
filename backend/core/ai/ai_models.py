@@ -4,7 +4,6 @@ import os
 import pickle
 import numpy as np
 from dotenv import load_dotenv
-from deepface import DeepFace
 from azure.cognitiveservices.vision.computervision import ComputerVisionClient
 from azure.cognitiveservices.vision.computervision.models import OperationStatusCodes
 from msrest.authentication import CognitiveServicesCredentials
@@ -14,7 +13,7 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from sklearn.linear_model import Ridge
 from sklearn.decomposition import PCA
 from django.conf import settings
-from core.models import Rating, UserPreferences, Photo
+from core.models import PhotoRating, UserPreference, Photo
 from openai import OpenAI
 import tensorflow as tf
 
@@ -30,10 +29,12 @@ computervision_client = ComputerVisionClient(
 )
 
 # Instantiate the OpenAI client
-client = OpenAI(api_key=api_key)
+client = OpenAI(
+    api_key=api_key
+)
 
 # Load the pre-trained MobileNetV2 model
-mobilenet_model = MobileNetV2(weights="imagenet", include_top=False, pooling="avg")
+mobilenet_model = MobileNetV2(weights="imagenet", include_top=False, pooling="avg", input_shape=(224, 224, 3))
 
 
 def extract_image_features(img_path):
@@ -50,44 +51,20 @@ def extract_image_features(img_path):
         return None
 
 
-def detect_gender(img_path):
-    """Detect gender using DeepFace."""
-    try:
-        print(f"Analyzing gender for: {img_path}")
-        analysis = DeepFace.analyze(
-            img_path=img_path,
-            actions=["gender"],
-            enforce_detection=False
-        )
-
-        # Handle cases where the analysis is a list
-        if isinstance(analysis, list) and len(analysis) > 0:
-            analysis = analysis[0]
-
-        # Extract the dominant gender
-        dominant_gender = analysis.get("dominant_gender", None)
-        print(f"Dominant gender: {dominant_gender}")
-
-        # Normalize to lower case for consistency
-        if dominant_gender:
-            return "Man" if dominant_gender.lower() == "man" else "Woman"
-        else:
-            return None
-    except Exception as e:
-        print(f"Error detecting gender for {img_path}: {e}")
-        return None
-
-
 def train_user_model(user_id):
     """Train a regression model for the user based on their ratings."""
-    ratings = Rating.query.filter_by(user_id=user_id).all()
+    from core.models import PhotoRating  # Import here to avoid circular imports
+    
+    # Get all ratings for the user
+    ratings = PhotoRating.objects.filter(user_id=user_id).select_related('photo')
     if not ratings:
         print(f"No ratings found for user {user_id}.")
         return
 
     X, y = [], []
     for rating in ratings:
-        img_path = os.path.join(settings.STATIC_ROOT, rating.image_filename.lstrip("/"))
+        # Get the full path of the image
+        img_path = os.path.join(settings.BASE_DIR, rating.photo.image_url.lstrip('/'))
         if not os.path.isfile(img_path):
             print(f"Invalid image file: {img_path}")
             continue

@@ -138,3 +138,19 @@ class UserModel(models.Model):
     
     class Meta:
         db_table = 'user_models'
+
+class PhotoRating(models.Model):
+    """User ratings for calibration photos."""
+    user = models.ForeignKey('core.User', on_delete=models.CASCADE, related_name='photo_ratings')
+    photo = models.ForeignKey(Photo, on_delete=models.CASCADE, related_name='ratings')
+    rating = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'photo_ratings'
+        unique_together = ['user', 'photo']  # Each user can rate a photo only once
+
+    def __str__(self):
+        return f"{self.user.email} rated photo {self.photo.id}: {self.rating}"

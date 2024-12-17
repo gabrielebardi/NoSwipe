@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/api';
+import { getImageUrl } from '@/lib/utils/urls';
 import type { CalibrationPhoto } from '@/types';
-import { Star, Loader } from 'lucide-react';
+import { Star, Loader, Home } from 'lucide-react';
+import Navigation from '@/components/layout/Navigation';
 
 export default function CalibrationPage() {
   const router = useRouter();
@@ -38,27 +40,39 @@ export default function CalibrationPage() {
       await apiService.submitPhotoRating(photos[currentIndex].id, rating);
 
       if (currentIndex === photos.length - 1) {
-        await apiService.trainUserModel();
+        // Mark calibration as complete and train the model
+        const response = await apiService.completeCalibration();
+        if (response.status === 'error') {
+          throw new Error(response.message || 'Failed to complete calibration');
+        }
         setIsCompleted(true);
-        setTimeout(() => {
-          router.push('/matches');
-        }, 2000);
       } else {
         setCurrentIndex(prev => prev + 1);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit rating');
+      // If there's an error on the last photo, allow retrying
+      if (currentIndex === photos.length - 1) {
+        setCurrentIndex(prev => prev - 1);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleGoHome = () => {
+    router.push('/dashboard');
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="flex items-center space-x-2 text-white">
-          <Loader className="animate-spin" size={24} />
-          <span>Loading photos...</span>
+      <div className="min-h-screen bg-slate-900">
+        <Navigation />
+        <div className="min-h-screen pt-16 flex items-center justify-center">
+          <div className="flex items-center space-x-2 text-white">
+            <Loader className="animate-spin" size={24} />
+            <span>Loading photos...</span>
+          </div>
         </div>
       </div>
     );
@@ -66,9 +80,12 @@ export default function CalibrationPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="text-red-400 text-center p-8 bg-red-900/50 rounded-lg">
-          {error}
+      <div className="min-h-screen bg-slate-900">
+        <Navigation />
+        <div className="min-h-screen pt-16 flex items-center justify-center">
+          <div className="text-red-400 text-center p-8 bg-red-900/50 rounded-lg">
+            {error}
+          </div>
         </div>
       </div>
     );
@@ -76,23 +93,27 @@ export default function CalibrationPage() {
 
   if (photos.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="text-white text-xl">No photos available for calibration.</div>
+      <div className="min-h-screen bg-slate-900">
+        <Navigation />
+        <div className="min-h-screen pt-16 flex items-center justify-center">
+          <div className="text-white text-xl">No photos available for calibration.</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 py-8">
-      <div className="container mx-auto px-4">
+    <div className="min-h-screen bg-slate-900">
+      <Navigation />
+      <div className="container mx-auto px-4 py-8 pt-24">
         <h1 className="text-3xl font-bold text-white text-center mb-8">
-          Rate Your Preferences
+          {isCompleted ? 'Calibration Complete!' : 'Rate Your Preferences'}
         </h1>
         <div className="max-w-md mx-auto bg-slate-800 rounded-xl shadow-lg p-6">
           {!isCompleted && currentIndex < photos.length && (
             <>
               <img 
-                src={photos[currentIndex].image_url} 
+                src={getImageUrl(photos[currentIndex].image_url)}
                 alt={`Calibration photo ${currentIndex + 1}`}
                 className="w-full h-auto rounded-lg shadow-lg mb-6"
               />
@@ -126,11 +147,19 @@ export default function CalibrationPage() {
           {isCompleted && (
             <div className="text-center py-8">
               <h2 className="text-2xl font-bold text-white mb-4">
-                Calibration Complete!
+                Thank you for your feedback!
               </h2>
-              <p className="text-slate-400">
-                Redirecting you to your matches...
+              <p className="text-slate-400 mb-8">
+                We'll use your preferences to find matches that you might be interested in. 
+                Come back soon to check your potential matches!
               </p>
+              <button
+                onClick={handleGoHome}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                <Home className="mr-2" size={20} />
+                Go to Dashboard
+              </button>
             </div>
           )}
         </div>

@@ -15,6 +15,8 @@ from .views import (
     MatchViewSet,
     CalibrationView,
     CsrfTokenView,
+    CalibrationPhotosView,
+    PhotoRatingView,
 )
 
 router = DefaultRouter()
@@ -36,6 +38,10 @@ urlpatterns = [
     
     # Location endpoints
     path('locations/search/', LocationSearchView.as_view(), name='location-search'),
+    
+    # Calibration endpoints
+    path('photos/calibration/', CalibrationPhotosView.as_view(), name='calibration-photos'),
+    path('photos/rate/', PhotoRatingView.as_view(), name='photo-rating'),
     
     # CSRF token endpoint
     path('csrf/', CsrfTokenView.as_view(), name='csrf-token'),

@@ -3,36 +3,33 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/api';
-import { LocationSearch } from './location-search';
-import type { Location } from '@/types';
+import { useAuthStore } from '@/lib/store/auth';
+import Navigation from '@/components/layout/Navigation';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    gender: '',
-    age: '',
-    location: null as Location | null,
-  });
-  const [error, setError] = useState<string | null>(null);
+  const { user, updateUser } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    gender: user?.gender || '',
+    age: user?.age || '',
+    location: user?.location || null,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.gender || !formData.age || !formData.location) {
-      setError('Please fill in all fields');
-      return;
-    }
-
     setError(null);
     setIsLoading(true);
 
     try {
-      await apiService.updateUserDetails({
+      const updatedUser = await apiService.updateUserDetails({
         gender: formData.gender as 'M' | 'F' | 'O',
-        age: parseInt(formData.age),
+        age: parseInt(formData.age as string),
         location: formData.location,
       });
+
+      updateUser(updatedUser);
       router.push('/onboarding/preferences');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile');
@@ -42,92 +39,68 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 py-8">
-      <div className="container mx-auto px-4">
-        <div className="max-w-md mx-auto">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Tell Us About Yourself</h1>
-            <p className="text-slate-400">Step {step} of 3</p>
+    <div className="min-h-screen bg-slate-900">
+      <Navigation />
+      <div className="min-h-screen pt-16 flex items-center justify-center">
+        <div className="max-w-md w-full space-y-8 p-8 bg-slate-800 rounded-xl shadow-lg">
+          <div>
+            <h2 className="text-3xl font-bold text-center text-white">
+              Welcome to NoSwipe
+            </h2>
+            <p className="mt-2 text-center text-slate-400">
+              Let's get to know you better
+            </p>
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-500 rounded-lg p-4 mb-6">
+            <div className="bg-red-500/10 border border-red-500 text-red-500 rounded-lg p-4 text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                I am a...
+              <label htmlFor="gender" className="block text-sm font-medium text-slate-300">
+                Gender
               </label>
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  { value: 'M', label: 'Man' },
-                  { value: 'F', label: 'Woman' },
-                  { value: 'O', label: 'Other' },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => {
-                      setFormData({ ...formData, gender: value });
-                      setStep(2);
-                    }}
-                    className={`p-4 rounded-lg border ${
-                      formData.gender === value
-                        ? 'border-blue-500 bg-blue-500/20 text-white'
-                        : 'border-slate-700 hover:border-slate-600 text-slate-400'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <select
+                id="gender"
+                required
+                value={formData.gender}
+                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Select your gender</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
+                <option value="O">Other</option>
+              </select>
             </div>
 
-            {step >= 2 && (
-              <div>
-                <label htmlFor="age" className="block text-sm font-medium text-slate-300 mb-2">
-                  How old are you?
-                </label>
-                <input
-                  id="age"
-                  type="number"
-                  min="18"
-                  max="100"
-                  value={formData.age}
-                  onChange={(e) => {
-                    setFormData({ ...formData, age: e.target.value });
-                    if (e.target.value) setStep(3);
-                  }}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  placeholder="Enter your age"
-                />
-              </div>
-            )}
+            <div>
+              <label htmlFor="age" className="block text-sm font-medium text-slate-300">
+                Age
+              </label>
+              <input
+                id="age"
+                type="number"
+                required
+                min="18"
+                max="100"
+                value={formData.age}
+                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                placeholder="Enter your age"
+              />
+            </div>
 
-            {step >= 3 && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Where do you live?
-                </label>
-                <LocationSearch
-                  onSelect={(location) => setFormData({ ...formData, location })}
-                  selected={formData.location}
-                />
-              </div>
-            )}
-
-            {step === 3 && formData.location && (
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Saving...' : 'Continue'}
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Saving...' : 'Continue'}
+            </button>
           </form>
         </div>
       </div>

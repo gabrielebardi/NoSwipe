@@ -3,6 +3,7 @@ import type { UserProfile, Location } from '@/lib/types';
 
 interface AuthResponse {
   user: UserProfile;
+  calibration_completed?: boolean;
 }
 
 const api = axios.create({
@@ -72,6 +73,10 @@ export const apiService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
     try {
       const response = await api.post<AuthResponse>('/api/auth/login/', { email, password });
+      // Set onboarding cookie based on calibration status
+      if (response.data.user.calibration_completed) {
+        document.cookie = 'onboarding_completed=true; path=/';
+      }
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -206,6 +211,17 @@ export const apiService = {
   processMatchFeedback: async (matchId: number, action: 'accept' | 'reject'): Promise<void> => {
     try {
       await api.post(`/api/matches/${matchId}/feedback/`, { action });
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  completeCalibration: async () => {
+    try {
+      const response = await api.post('/api/user/calibrate/');
+      // Set onboarding cookie when calibration is completed
+      document.cookie = 'onboarding_completed=true; path=/';
+      return response.data;
     } catch (error) {
       throw handleApiError(error);
     }

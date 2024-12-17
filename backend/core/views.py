@@ -7,8 +7,9 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model, login
 from django.middleware.csrf import get_token
 import requests
+from datetime import date
 
-from .models import User, Photo, Match, UserPreference
+from .models import User, Photo, Match, UserPreference, PhotoRating
 from .serializers import (
     UserProfileSerializer, 
     PhotoSerializer, 
@@ -17,6 +18,7 @@ from .serializers import (
     LoginSerializer,
     UserPreferenceSerializer
 )
+from .ai.ai_models import train_user_model
 
 # ViewSets
 class UserViewSet(viewsets.ModelViewSet):
@@ -125,8 +127,14 @@ class OnboardingStatusView(APIView):
     def get(self, request):
         user = request.user
         
+        # Calculate age from birth_date if available
+        age = None
+        if user.birth_date:
+            today = date.today()
+            age = today.year - user.birth_date.year - ((today.month, today.day) < (user.birth_date.month, user.birth_date.day))
+        
         # Check each step of onboarding
-        has_basic_info = bool(user.gender and user.age and user.location)
+        has_basic_info = bool(user.gender and age and user.location)
         has_preferences = bool(user.preferences.preferred_gender and 
                             user.preferences.preferred_location)
         has_calibration = user.calibration_completed
@@ -216,11 +224,99 @@ class CalibrationView(APIView):
 
     def post(self, request):
         user = request.user
-        user.calibration_completed = True
-        user.save()
-        return Response({'status': 'success'})
+        try:
+            # Train the user model based on their ratings
+            train_user_model(user.id)
+            # Mark calibration as completed
+            user.calibration_completed = True
+            user.save()
+            return Response({'status': 'success', 'message': 'Calibration completed and model trained successfully'})
+        except Exception as e:
+            return Response(
+                {'status': 'error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # CSRF Token View
 class CsrfTokenView(APIView):
     def get(self, request):
         return Response({'csrfToken': get_token(request)})
+
+class CalibrationPhotosView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Get the user's preferred gender from preferences
+        try:
+            user_preferences = request.user.preferences
+            preferred_gender = user_preferences.preferred_gender
+        except UserPreference.DoesNotExist:
+            return Response({'detail': 'User preferences not set'}, status=400)
+
+        # Map preference to photo gender
+        gender_map = {
+            'M': 'male',
+            'F': 'female',
+            'B': None  # Will return both
+        }
+        
+        target_gender = gender_map.get(preferred_gender)
+        if not target_gender and preferred_gender != 'B':
+            return Response({'detail': 'Invalid gender preference'}, status=400)
+
+        # Get all photos from the Photo model based on gender
+        if target_gender:
+            photos = Photo.objects.filter(gender=preferred_gender).order_by('?')[:10]
+        else:
+            # For 'Both' preference, get 5 photos of each gender
+            male_photos = Photo.objects.filter(gender='M').order_by('?')[:5]
+            female_photos = Photo.objects.filter(gender='F').order_by('?')[:5]
+            photos = list(male_photos) + list(female_photos)
+
+        serializer = PhotoSerializer(photos, many=True)
+        return Response(serializer.data)
+
+class PhotoRatingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        photo_id = request.data.get('photo_id')
+        rating = request.data.get('rating')
+
+        if not photo_id or not rating:
+            return Response(
+                {'detail': 'Both photo_id and rating are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            rating = int(rating)
+            if not (1 <= rating <= 5):
+                raise ValueError('Rating must be between 1 and 5')
+        except ValueError:
+            return Response(
+                {'detail': 'Rating must be an integer between 1 and 5'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            photo = Photo.objects.get(id=photo_id)
+        except Photo.DoesNotExist:
+            return Response(
+                {'detail': 'Photo not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Create or update the rating
+        rating_obj, created = PhotoRating.objects.update_or_create(
+            user=request.user,
+            photo=photo,
+            defaults={'rating': rating}
+        )
+
+        return Response({
+            'id': rating_obj.id,
+            'photo_id': photo_id,
+            'rating': rating,
+            'created_at': rating_obj.created_at
+        })
