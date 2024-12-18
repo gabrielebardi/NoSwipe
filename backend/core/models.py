@@ -15,15 +15,20 @@ class User(AbstractUser):
     ]
     
     email = models.EmailField(unique=True)
-    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
-    location = models.JSONField(null=True, blank=True)
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
+    location = models.TextField(max_length=500, null=True, blank=True)
     bio = models.TextField(max_length=500, blank=True)
-    profile_photo = models.URLField(max_length=500, blank=True)
+    profile_photo = models.URLField(max_length=255, null=True, blank=True)
     calibration_completed = models.BooleanField(default=False)
     
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
+
     class Meta:
-        db_table = 'users'
+        db_table = 'auth_user'
+        verbose_name = 'User'
+        verbose_name_plural = 'Users'
 
     def __str__(self):
         return self.email
@@ -51,24 +56,21 @@ class UserPreference(models.Model):
 
 class Photo(models.Model):
     """User photos."""
-    GENDER_CHOICES = [
-        ('M', 'Male'),
-        ('F', 'Female'),
-        ('O', 'Other'),
-    ]
-    
-    image_url = models.URLField(max_length=500)
-    gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
-    age = models.IntegerField()
-    ethnicity = models.CharField(max_length=50, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='photos', null=True)
+    image_url = models.URLField(max_length=255)
+    is_profile_photo = models.BooleanField(default=False)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    gender = models.CharField(max_length=1, choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')], null=True)
+    age = models.IntegerField(null=True)
+    ethnicity = models.CharField(max_length=50, null=True, blank=True)
     features = models.JSONField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        db_table = 'photos'
 
     def __str__(self):
-        return f"{self.gender} - {self.age} years old"
+        return f"Photo {self.id} - {self.user.email if self.user else 'No user'}"
+
+    class Meta:
+        db_table = 'photos'
+        ordering = ['-uploaded_at']
 
 class Interest(models.Model):
     """Available interests that users can rate."""

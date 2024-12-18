@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiService } from '@/lib/api';
-import { UserProfile } from '@/lib/types';
+import { User, UserProfile } from '@/types';
 
 interface RegisterData {
   first_name: string;
@@ -11,37 +11,46 @@ interface RegisterData {
 }
 
 interface AuthState {
-  isAuthenticated: boolean;
   user: UserProfile | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ user: UserProfile }>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
   setIsAuthenticated: (value: boolean) => void;
+  updateUser: (user: UserProfile) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  isAuthenticated: false,
   user: null,
+  isAuthenticated: false,
   isLoading: false,
   error: null,
+
   setIsAuthenticated: (value: boolean) => set({ isAuthenticated: value }),
+
+  updateUser: (user: UserProfile) => set({ user }),
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
     try {
-      const data = await apiService.login(email, password);
+      const response = await apiService.login(email, password);
       localStorage.setItem('isAuthenticated', 'true');
-      set({ isAuthenticated: true, user: data.user, isLoading: false });
+      set({ 
+        isAuthenticated: true, 
+        user: response.user,
+        isLoading: false 
+      });
+      return { user: response.user };
     } catch (error) {
       localStorage.removeItem('isAuthenticated');
       set({ 
         isAuthenticated: false,
         user: null,
-        error: error instanceof Error ? error.message : 'Login failed', 
+        error: error instanceof Error ? error.message : 'Login failed',
         isLoading: false 
       });
       throw error;
@@ -53,13 +62,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const response = await apiService.register(data);
       localStorage.setItem('isAuthenticated', 'true');
-      set({ isAuthenticated: true, user: response.user, isLoading: false });
+      set({ 
+        isAuthenticated: true, 
+        user: response.user, 
+        isLoading: false 
+      });
     } catch (error) {
       localStorage.removeItem('isAuthenticated');
       set({ 
         isAuthenticated: false,
         user: null,
-        error: error instanceof Error ? error.message : 'Registration failed', 
+        error: error instanceof Error ? error.message : 'Registration failed',
         isLoading: false 
       });
       throw error;
@@ -71,13 +84,21 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await apiService.logout();
       localStorage.removeItem('isAuthenticated');
-      set({ isAuthenticated: false, user: null, isLoading: false });
-    } catch (error) {
       set({ 
-        error: error instanceof Error ? error.message : 'Logout failed', 
+        isAuthenticated: false, 
+        user: null, 
         isLoading: false 
       });
-      throw error;
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still clear the state even if the API call fails
+      localStorage.removeItem('isAuthenticated');
+      set({ 
+        isAuthenticated: false,
+        user: null,
+        error: error instanceof Error ? error.message : 'Logout failed',
+        isLoading: false 
+      });
     }
   },
 
@@ -88,7 +109,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: data, isLoading: false });
     } catch (error) {
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to fetch profile', 
+        error: error instanceof Error ? error.message : 'Failed to fetch profile',
         isLoading: false 
       });
       throw error;
@@ -102,7 +123,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: updatedUser, isLoading: false });
     } catch (error) {
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to update profile', 
+        error: error instanceof Error ? error.message : 'Failed to update profile',
         isLoading: false 
       });
       throw error;

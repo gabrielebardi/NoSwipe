@@ -50,13 +50,16 @@ class MatchViewSet(viewsets.ModelViewSet):
 # Auth Views
 class RegisterView(APIView):
     def post(self, request):
+        print(f"DEBUG - RegisterView POST - request data: {request.data}")  # Debug print
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
+            print("DEBUG - RegisterView - serializer is valid")  # Debug print
             user = serializer.save()
             return Response({
                 'user': UserProfileSerializer(user).data,
                 'message': 'Registration successful'
             })
+        print(f"DEBUG - RegisterView - serializer errors: {serializer.errors}")  # Debug print
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
@@ -67,13 +70,31 @@ class LoginView(APIView):
             # Get the authentication backend
             backend = 'django.contrib.auth.backends.ModelBackend'
             login(request, user, backend=backend)
+            
             # Set session cookie
             request.session.set_expiry(60 * 60 * 24 * 7)  # 7 days
             request.session.modified = True
             
-            return Response({
-                'user': UserProfileSerializer(user).data
+            # Set onboarding cookie based on calibration status
+            response = Response({
+                'user': UserProfileSerializer(user).data,
+                'calibration_completed': user.calibration_completed
             })
+            
+            print(f"DEBUG - Setting cookies for user {user.email}:")
+            print(f"DEBUG - calibration_completed: {user.calibration_completed}")
+            
+            response.set_cookie(
+                'onboarding_completed',
+                str(user.calibration_completed).lower(),
+                max_age=60 * 60 * 24 * 7,  # 7 days
+                httponly=False,  # Allow JS access
+                samesite='Lax'
+            )
+            
+            print(f"DEBUG - Cookie set: onboarding_completed={str(user.calibration_completed).lower()}")
+            return response
+            
         return Response(serializer.errors, status=400)
 
 class LogoutView(APIView):
@@ -92,10 +113,28 @@ class UserDetailsView(APIView):
         return Response(serializer.data)
 
     def patch(self, request):
+        print("DEBUG - Updating user details:", request.data)
         serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
+            user = serializer.save()
+            print("DEBUG - User details updated successfully:", UserProfileSerializer(user).data)
+            
+            # Check if this update completes the basic info step
+            has_basic_info = all([
+                user.gender,
+                user.birth_date,
+                user.location
+            ])
+            
+            if has_basic_info:
+                print("DEBUG - Basic info step completed")
+            
+            return Response({
+                'user': UserProfileSerializer(user).data,
+                'basic_info_complete': has_basic_info
+            })
+            
+        print("DEBUG - User details update failed:", serializer.errors)
         return Response(serializer.errors, status=400)
 
 class UserPreferencesView(APIView):
@@ -125,33 +164,74 @@ class OnboardingStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        print("DEBUG - Checking onboarding status for user:", request.user.email)
         user = request.user
         
-        # Calculate age from birth_date if available
-        age = None
-        if user.birth_date:
-            today = date.today()
-            age = today.year - user.birth_date.year - ((today.month, today.day) < (user.birth_date.month, user.birth_date.day))
+        # For new users, ensure they have a preferences record
+        try:
+            preferences = UserPreference.objects.get(user=user)
+        except UserPreference.DoesNotExist:
+            print("DEBUG - Creating new preferences for user:", user.email)
+            preferences = UserPreference.objects.create(user=user)
         
-        # Check each step of onboarding
-        has_basic_info = bool(user.gender and age and user.location)
-        has_preferences = bool(user.preferences.preferred_gender and 
-                            user.preferences.preferred_location)
+        # Check required fields for basic info (Step 1)
+        basic_info_fields = {
+            'gender': user.gender,
+            'birth_date': user.birth_date,
+            'location': user.location,
+        }
+        print("DEBUG - Basic info fields:", basic_info_fields)
+        has_basic_info = all(basic_info_fields.values())
+        
+        # Check required fields for preferences (Step 2)
+        preference_fields = {
+            'preferred_gender': preferences.preferred_gender,
+            'preferred_location': preferences.preferred_location,
+            'preferred_age_min': preferences.preferred_age_min,
+            'preferred_age_max': preferences.preferred_age_max,
+        }
+        print("DEBUG - Preference fields:", preference_fields)
+        has_preferences = all(preference_fields.values())
+        
+        # Check calibration status (Step 3)
         has_calibration = user.calibration_completed
+        print("DEBUG - Calibration status:", has_calibration)
         
-        # Determine current step
-        current_step = None
+        # Determine current step and next step
         if not has_basic_info:
             current_step = 'details'
+            next_step = '/onboarding'
         elif not has_preferences:
             current_step = 'preferences'
+            next_step = '/onboarding/preferences'
         elif not has_calibration:
             current_step = 'calibration'
+            next_step = '/calibration'
+        else:
+            current_step = None
+            next_step = '/dashboard'
             
-        return Response({
-            'is_completed': has_basic_info and has_preferences and has_calibration,
-            'current_step': current_step
-        })
+        # Only mark as complete if ALL steps are done
+        completion_status = 'complete' if (has_basic_info and has_preferences and has_calibration) else 'incomplete'
+            
+        response_data = {
+            'status': completion_status,
+            'current_step': current_step,
+            'next_step': next_step,
+            'steps_completed': {
+                'basic_info': has_basic_info,
+                'preferences': has_preferences,
+                'calibration': has_calibration
+            },
+            'missing_fields': {
+                'basic_info': {k: v is None or v == '' for k, v in basic_info_fields.items()},
+                'preferences': {k: v is None or v == '' for k, v in preference_fields.items()},
+                'calibration': not has_calibration
+            }
+        }
+        
+        print("DEBUG - Onboarding response:", response_data)
+        return Response(response_data)
 
 # Location Views
 class LocationSearchView(APIView):
@@ -159,7 +239,10 @@ class LocationSearchView(APIView):
         query = request.GET.get('query', '')
         location_type = request.GET.get('type')
         
+        print(f"DEBUG - Location search request - Query: {query}, Type: {location_type}")
+        
         if not query:
+            print("DEBUG - Empty query, returning empty results")
             return Response([])
             
         # Use Nominatim API for geocoding
@@ -168,7 +251,8 @@ class LocationSearchView(APIView):
             'q': query,
             'format': 'json',
             'addressdetails': 1,
-            'limit': 5
+            'limit': 5,
+            'featuretype': 'city'  # Prioritize city results
         }
         
         headers = {
@@ -176,46 +260,54 @@ class LocationSearchView(APIView):
         }
         
         try:
+            print(f"DEBUG - Sending request to Nominatim API with params: {params}")
             response = requests.get(base_url, params=params, headers=headers)
             response.raise_for_status()
             results = response.json()
+            print(f"DEBUG - Nominatim API response: {results}")
             
             formatted_results = []
             for result in results:
                 address = result.get('address', {})
                 
-                # Determine the type of location
-                result_type = 'city'
-                if address.get('postcode'):
-                    result_type = 'postal_code'
-                elif address.get('state') or address.get('region'):
-                    result_type = 'region'
-                elif address.get('country'):
-                    result_type = 'country'
-                    
-                # Filter by type if specified
-                if location_type and location_type != result_type:
+                # Extract city name with fallbacks
+                city = (
+                    address.get('city') or 
+                    address.get('town') or 
+                    address.get('village') or 
+                    address.get('municipality')
+                )
+                
+                # Only include results that have a city
+                if not city:
                     continue
                     
                 formatted_result = {
                     'id': result['place_id'],
-                    'type': result_type,
-                    'postal_code': address.get('postcode'),
-                    'city': address.get('city') or address.get('town') or address.get('village'),
+                    'type': 'city',
+                    'city': city,
                     'region': address.get('state') or address.get('region'),
                     'country': address.get('country'),
                     'latitude': float(result['lat']),
                     'longitude': float(result['lon']),
-                    'display_name': result['display_name']
+                    'display_name': f"{city}, {address.get('country', '')}"
                 }
                 formatted_results.append(formatted_result)
                 
+            print(f"DEBUG - Returning formatted results: {formatted_results}")
             return Response(formatted_results)
             
         except requests.RequestException as e:
+            print(f"ERROR - Failed to fetch locations: {str(e)}")
             return Response(
-                {'detail': 'Failed to search locations'},
+                {'detail': 'Failed to search locations. Please try again.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            print(f"ERROR - Unexpected error in location search: {str(e)}")
+            return Response(
+                {'detail': 'An unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 # Calibration Views

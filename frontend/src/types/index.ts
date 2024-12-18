@@ -6,13 +6,12 @@ export interface User {
   last_name: string;
   birth_date?: string;
   gender?: 'M' | 'F' | 'O';
-  age?: number;
   location?: Location;
   bio?: string;
   is_active: boolean;
   date_joined: string;
   last_login?: string;
-  onboarding_completed: boolean;
+  calibration_completed: boolean;
 }
 
 export interface Location {
@@ -91,4 +90,29 @@ export interface LocationSearchResult {
   latitude: number;
   longitude: number;
   display_name: string;
+}
+
+export interface OnboardingStatus {
+  status: 'complete' | 'incomplete';
+  current_step: 'details' | 'preferences' | 'calibration' | null;
+  next_step: string;
+  steps_completed: {
+    basic_info: boolean;
+    preferences: boolean;
+    calibration: boolean;
+  };
+  missing_fields: {
+    basic_info: {
+      gender: boolean;
+      birth_date: boolean;
+      location: boolean;
+    };
+    preferences: {
+      preferred_gender: boolean;
+      preferred_location: boolean;
+      preferred_age_min: boolean;
+      preferred_age_max: boolean;
+    };
+    calibration: boolean;
+  };
 }

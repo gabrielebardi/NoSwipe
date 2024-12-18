@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/lib/store/auth';
 import { apiService } from '@/lib/api';
 import Navigation from '@/components/layout/Navigation';
+import { OnboardingStatus } from '@/types';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,21 +24,24 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(formData.email, formData.password);
+      console.log('Attempting login...'); // Debug log
+      const { user } = await login(formData.email, formData.password);
+      console.log('Login successful, user data:', user); // Debug log
       
-      // Wait a brief moment for the session to be properly set
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Check onboarding status
-      try {
-        const { is_completed } = await apiService.getOnboardingStatus();
-        router.push(is_completed ? '/dashboard' : '/onboarding');
-      } catch (err) {
-        // If we can't check onboarding status, default to onboarding
+      // Simple check: if calibration is not completed, go to onboarding
+      if (!user.calibration_completed) {
+        console.log('User needs onboarding, redirecting...'); // Debug log
         router.push('/onboarding');
+        return;
       }
+
+      // If calibration is completed, go to dashboard
+      console.log('User completed onboarding, redirecting to dashboard...'); // Debug log
+      router.push('/dashboard');
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      console.error('Login error:', err); // Debug log
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

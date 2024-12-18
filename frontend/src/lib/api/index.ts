@@ -1,9 +1,20 @@
 import axios from 'axios';
 import type { UserProfile, Location } from '@/lib/types';
+import { OnboardingStatus, User, UserPreferences, LocationSearchResult } from '@/types';
 
 interface AuthResponse {
   user: UserProfile;
   calibration_completed?: boolean;
+}
+
+interface ApiResponse<T> {
+  data: T;
+  message?: string;
+}
+
+interface ApiError {
+  message: string;
+  errors?: Record<string, string[]>;
 }
 
 const api = axios.create({
@@ -69,6 +80,14 @@ const handleApiError = (error: any) => {
   }
 };
 
+async function handleResponse<T>(response: Response): Promise<T> {
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'An error occurred');
+  }
+  return data as T;
+}
+
 export const apiService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
     try {
@@ -133,11 +152,12 @@ export const apiService = {
     }
   },
 
-  getOnboardingStatus: async () => {
+  getOnboardingStatus: async (): Promise<OnboardingStatus> => {
     try {
-      const response = await api.get('/api/user/onboarding-status/');
+      const response = await api.get<OnboardingStatus>('/api/user/onboarding-status/');
       return response.data;
     } catch (error) {
+      console.error('Onboarding status error:', error); // Debug log
       throw handleApiError(error);
     }
   },
@@ -171,13 +191,15 @@ export const apiService = {
 
   updateUserDetails: async (data: {
     gender: 'M' | 'F' | 'O';
-    age: number;
+    birth_date: string;
     location: any;
   }): Promise<UserProfile> => {
     try {
+      console.log('API: Updating user details:', data);
       const response = await api.patch<UserProfile>('/api/user/details/', data);
       return response.data;
     } catch (error) {
+      console.error('API: Failed to update user details:', error);
       throw handleApiError(error);
     }
   },
@@ -199,12 +221,44 @@ export const apiService = {
 
   searchLocations: async (query: string): Promise<Location[]> => {
     try {
+      console.log('API: Searching locations with query:', query); // Debug log
       const response = await api.get<Location[]>('/api/locations/search/', {
-        params: { query }
+        params: { 
+          query,
+          type: 'city'
+        }
       });
-      return response.data;
+      console.log('API: Location search response:', response.data); // Debug log
+      
+      if (!response.data || response.data.length === 0) {
+        console.log('API: No locations found for query:', query);
+        return [];
+      }
+
+      // Transform the response to match our Location type
+      const locations = response.data.map(loc => ({
+        id: loc.id || String(Math.random()), // Ensure we always have an ID
+        type: loc.type || 'city',
+        city: loc.city || loc.name || loc.display_name,
+        region: loc.region || loc.state,
+        country: loc.country,
+        latitude: loc.latitude || loc.lat,
+        longitude: loc.longitude || loc.lon,
+        display_name: loc.display_name || `${loc.city || loc.name}${loc.region ? `, ${loc.region}` : ''}${loc.country ? `, ${loc.country}` : ''}`
+      }));
+      
+      console.log('API: Transformed locations:', locations); // Debug log
+      return locations;
     } catch (error) {
-      throw handleApiError(error);
+      console.error('API: Location search error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('API: Detailed error:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          config: error.config
+        });
+      }
+      throw new Error(error instanceof Error ? error.message : 'Failed to search locations');
     }
   },
 

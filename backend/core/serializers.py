@@ -15,26 +15,37 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ('email', 'first_name', 'last_name', 'password', 'password2')
 
     def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
+        print(f"DEBUG - RegisterSerializer validate - attrs: {attrs}")  # Debug print
+        password1 = attrs.get('password', '')
+        password2 = attrs.get('password2', '')
+        
+        if password1 != password2:
+            print(f"DEBUG - Password mismatch: '{password1}' vs '{password2}'")  # Debug print
+            raise serializers.ValidationError({
+                "password": "Password fields didn't match. Please ensure both passwords are exactly the same."
+            })
+            
         return attrs
 
     def create(self, validated_data):
+        print(f"DEBUG - RegisterSerializer create - validated_data: {validated_data}")  # Debug print
         validated_data.pop('password2')
-        # Generate username from email
         email = validated_data['email']
-        username = email.split('@')[0]
-        base_username = username
-        counter = 1
         
-        # Ensure unique username
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username}{counter}"
-            counter += 1
-            
-        validated_data['username'] = username
-        user = User.objects.create_user(**validated_data)
-        return user
+        # Set username equal to email - this will be used internally only
+        validated_data['username'] = email
+        
+        try:
+            # Ensure new users start with calibration_completed as False
+            validated_data['calibration_completed'] = False
+            user = User.objects.create_user(**validated_data)
+            # Create empty preferences for the new user
+            UserPreference.objects.create(user=user)
+            print(f"DEBUG - User created successfully: {user.email}, calibration_completed: {user.calibration_completed}")
+            return user
+        except Exception as e:
+            print(f"DEBUG - Error creating user: {str(e)}")
+            raise serializers.ValidationError({"error": str(e)})
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
@@ -53,6 +64,8 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('No user found with this email')
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    location = serializers.JSONField(required=False)
+    
     class Meta:
         model = User
         fields = [
@@ -68,6 +81,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'bio': {'required': False},
             'profile_photo': {'required': False},
         }
+
+    def update(self, instance, validated_data):
+        # Convert location object to string if present
+        if 'location' in validated_data and validated_data['location']:
+            location_data = validated_data['location']
+            location_str = f"{location_data.get('city', '')}"
+            if location_data.get('region'):
+                location_str += f", {location_data['region']}"
+            if location_data.get('country'):
+                location_str += f", {location_data['country']}"
+            validated_data['location'] = location_str
+            
+        return super().update(instance, validated_data)
 
 class PhotoSerializer(serializers.ModelSerializer):
     class Meta:
