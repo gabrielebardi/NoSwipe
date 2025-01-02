@@ -71,55 +71,65 @@
 
 ## Production Preparation
 
-### 10. Production Files Setup ⏳
-- [ ] Update `requirements.txt` with all dependencies
-- [ ] Add test requirements to `requirements-dev.txt`
-- [ ] Verify all production settings
-- [ ] Test production configuration locally
-- [ ] Document any environment-specific settings
+### 10. Production Files Setup ✅
+- [x] Update `requirements.txt` with all dependencies
+- [x] Add test requirements to `requirements-dev.txt`
+- [x] Verify all production settings
+- [x] Test production configuration locally
+- [x] Document any environment-specific settings
 
-### 11. Version Control ⏳
-- [ ] Commit all changes (excluding `.env`)
-- [ ] Push to GitHub
-- [ ] Create production branch
-- [ ] Tag release version
+### 11. Version Control ✅
+- [x] Commit all changes (excluding `.env`)
+- [x] Push to GitHub
+- [x] Verify changes in staging branch
+- [x] Merge staging -> main when ready for production
 
 ## DigitalOcean Deployment
 
 ### 12. DigitalOcean App Platform Setup ⏳
 - [ ] Create new app in DigitalOcean
 - [ ] Connect GitHub repository
-- [ ] Configure build settings
-- [ ] Set up environment variables
-- [ ] Configure resources and scaling
+- [ ] Configure build settings:
+  - Set Python version
+  - Set build command: `pip install -r backend/requirements.txt`
+  - Set run command: `cd backend && gunicorn backend.wsgi:application`
+- [ ] Set up environment variables from `.env.example`
+- [ ] Configure resources and scaling:
+  - Start with Basic Plan
+  - Enable auto-deploy for staging branch
 
 ### 13. Initial Deployment ⏳
-- [ ] Deploy application
+- [ ] Deploy staging environment first
 - [ ] Monitor build process
 - [ ] Check deployment logs
 - [ ] Verify application starts
+- [ ] Configure custom domain for staging
 
 ### 14. Post-Deployment Verification ⏳
-- [ ] Test all API endpoints
+- [ ] Test health check endpoint
+- [ ] Test authentication flow
 - [ ] Verify static files serving
 - [ ] Check security headers
-- [ ] Test authentication flow
 - [ ] Monitor application performance
+- [ ] Run full API test suite against staging
 
-## Staging Environment
-
-### 15. Staging Setup ⏳
-- [ ] Create staging branch
-- [ ] Set up staging environment in DigitalOcean
-- [ ] Configure staging-specific variables
-- [ ] Document staging workflow
+### 15. Production Deployment ⏳
+- [ ] Review staging environment performance
+- [ ] Merge staging -> main
+- [ ] Tag release version (e.g., v1.0.0)
+- [ ] Deploy to production environment
+- [ ] Configure production domain
+- [ ] Verify production deployment
 
 ## Monitoring and Maintenance
 
 ### 16. Monitoring Setup ⏳
 - [ ] Set up error tracking (Sentry)
 - [ ] Configure performance monitoring
-- [ ] Set up alerts
+- [ ] Set up alerts for:
+  - Server errors
+  - High latency
+  - Failed health checks
 - [ ] Document monitoring procedures
 
 ### 17. Documentation ⏳
@@ -127,6 +137,7 @@
 - [ ] Document deployment procedures
 - [ ] Create troubleshooting guide
 - [ ] Document rollback procedures
+- [ ] Add environment setup guide
 
 ## Legend
 - ✅ Completed
