@@ -18,6 +18,7 @@ from .views import (
     CalibrationPhotosView,
     PhotoRatingView,
     UserPhotoView,
+    HealthCheckView,
 )
 
 router = DefaultRouter()
@@ -26,6 +27,9 @@ router.register(r'photos', PhotoViewSet)
 router.register(r'matches', MatchViewSet, basename='match')
 
 urlpatterns = [
+    # Health check endpoint
+    path('health/', HealthCheckView.as_view(), name='health-check'),
+    
     # Auth endpoints
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('auth/login/', LoginView.as_view(), name='login'),

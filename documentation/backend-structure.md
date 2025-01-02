@@ -236,3 +236,86 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 8. Handle errors gracefully
 9. Log important events and errors
 10. Document API endpoints 
+
+## Deployment Configuration
+
+### Production Settings
+
+```python
+# settings.py
+DEBUG = False
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'your_domain.com', 'staging.your_domain.com']
+
+# Static files configuration
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static'
+]
+
+# Database configuration
+DATABASES = {
+    'default': dj_database_url.config(
+        default=os.getenv('DATABASE_URL', 'sqlite:///db.sqlite3'),
+        conn_max_age=600
+    )
+}
+```
+
+### Environment Variables
+
+Required environment variables for production:
+```
+DEBUG=False
+SECRET_KEY=<your-secret-key>
+DATABASE_URL=<your-database-url>
+ALLOWED_HOSTS=your_domain.com,staging.your_domain.com
+```
+
+### Deployment Files
+
+1. `Procfile` (in backend root directory):
+```
+web: gunicorn backend.wsgi:application
+```
+
+2. `requirements.txt` additions:
+```
+gunicorn==21.2.0
+dj-database-url==2.1.0
+```
+
+### Production Server
+
+To test the production setup locally:
+1. Collect static files:
+```bash
+python manage.py collectstatic
+```
+
+2. Run the production server:
+```bash
+gunicorn backend.wsgi:application
+```
+
+### Security Considerations for Production
+
+1. Always use HTTPS in production
+2. Set secure cookie settings:
+```python
+# settings.py
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = True
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+```
+
+3. Update CORS settings for production:
+```python
+CORS_ALLOWED_ORIGINS = [
+    'https://your_domain.com',
+    'https://staging.your_domain.com',
+]
+``` 

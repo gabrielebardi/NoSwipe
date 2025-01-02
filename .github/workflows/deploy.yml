@@ -1,0 +1,51 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ staging ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install doctl
+      uses: digitalocean/action-doctl@v2
+      with:
+        token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+    
+    - name: Set up App Platform deployment
+      run: |
+        doctl apps list
+        # Add deployment commands here once DigitalOcean app is created
+        
+    - name: Run Migrations
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        cd backend
+        python manage.py migrate --noinput
+        
+    - name: Verify Deployment
+      run: |
+        # Add health check verification
+        curl --fail ${{ secrets.APP_URL }}/api/health/ || exit 1
+        
+    - name: Notify on Failure
+      if: failure()
+      run: |
+        echo "Deployment failed!"
+        # Add notification commands (e.g., Slack) here 

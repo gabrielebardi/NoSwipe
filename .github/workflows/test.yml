@@ -1,0 +1,69 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, staging ]
+  pull_request:
+    branches: [ main, staging ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        
+    - name: Run Black
+      run: |
+        cd backend
+        black . --check
+        
+    - name: Run Flake8
+      run: |
+        cd backend
+        flake8 . --max-line-length=120
+        
+    - name: Run tests
+      env:
+        DEBUG: "False"
+        SECRET_KEY: "test-key-not-used-in-production"
+        DATABASE_URL: "postgres://postgres:postgres@localhost:5432/test_db"
+        ALLOWED_HOSTS: "localhost,127.0.0.1"
+        CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+        CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
+      run: |
+        cd backend
+        pytest --cov=. --cov-report=xml
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./backend/coverage.xml
+        fail_ci_if_error: true 

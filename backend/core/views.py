@@ -534,3 +534,12 @@ class UserPhotoView(APIView):
                 {'detail': 'Photo not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+class HealthCheckView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        return Response(
+            {"status": "healthy"},
+            status=status.HTTP_200_OK
+        )
