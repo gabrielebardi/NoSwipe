@@ -5,11 +5,11 @@ from django.contrib.auth.admin import UserAdmin
 from .models import User, Photo, Match, UserPreference, PhotoRating
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('email', 'username', 'first_name', 'last_name', 'is_staff', 'calibration_completed')
+    list_display = ('email', 'first_name', 'last_name', 'is_staff', 'calibration_completed')
     list_filter = ('is_staff', 'is_superuser', 'calibration_completed')
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
-        ('Personal info', {'fields': ('first_name', 'last_name', 'username', 'birth_date', 'gender', 'location', 'bio', 'profile_photo')}),
+        ('Personal info', {'fields': ('first_name', 'last_name', 'birth_date', 'gender', 'location', 'bio', 'profile_photo')}),
         ('Onboarding Status', {'fields': ('calibration_completed',)}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
@@ -28,10 +28,12 @@ class UserPreferenceAdmin(admin.ModelAdmin):
     list_filter = ('preferred_gender',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name')
 
+@admin.register(Photo)
 class PhotoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'image_url', 'is_profile_photo', 'uploaded_at')
-    list_filter = ('is_profile_photo',)
-    search_fields = ('user__email',)
+    list_display = ['id', 'image', 'gender', 'age', 'created_at']
+    list_filter = ['gender', 'created_at']
+    search_fields = ['id', 'gender']
+    ordering = ['-created_at']
 
 class MatchAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'matched_user', 'status', 'created_at', 'compatibility_score')
@@ -45,6 +47,5 @@ class PhotoRatingAdmin(admin.ModelAdmin):
 
 admin.site.register(User, CustomUserAdmin)
 admin.site.register(UserPreference, UserPreferenceAdmin)
-admin.site.register(Photo, PhotoAdmin)
 admin.site.register(Match, MatchAdmin)
 admin.site.register(PhotoRating, PhotoRatingAdmin)

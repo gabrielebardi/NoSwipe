@@ -3,44 +3,49 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthStore } from '@/lib/store/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/layout/Navigation';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const register = useAuthStore((state) => state.register);
-  const [error, setError] = useState<string | null>(null);
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
     email: '',
     password: '',
     password2: '',
+    first_name: '',
+    last_name: '',
   });
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsLoading(true);
 
     try {
       await register(formData);
       router.push('/onboarding');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      console.error('Registration error:', err);
+      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <>
       <Navigation />
-      <div className="min-h-screen pt-16 flex items-center justify-center">
-        <div className="max-w-md w-full space-y-8 p-8 bg-slate-800 rounded-xl shadow-lg">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
           <div>
-            <h2 className="text-3xl font-bold text-center text-white">
-              Create Account
+            <h2 className="text-center text-3xl font-bold text-white">
+              Create your account
             </h2>
             <p className="mt-2 text-center text-slate-400">
-              Please fill in your details
+              Join NoSwipe today
             </p>
           </div>
 
@@ -50,99 +55,122 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label htmlFor="first_name" className="block text-sm font-medium text-slate-300">
-                  First Name
+          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="first_name" className="block text-sm font-medium text-slate-300">
+                    First Name
+                  </label>
+                  <input
+                    id="first_name"
+                    name="first_name"
+                    type="text"
+                    required
+                    value={formData.first_name}
+                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                    className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="John"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="last_name" className="block text-sm font-medium text-slate-300">
+                    Last Name
+                  </label>
+                  <input
+                    id="last_name"
+                    name="last_name"
+                    type="text"
+                    required
+                    value={formData.last_name}
+                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                    className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="Doe"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+                  Email
                 </label>
                 <input
-                  id="first_name"
-                  type="text"
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
                   required
-                  value={formData.first_name}
-                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  placeholder="Enter your first name"
+                  placeholder="you@example.com"
                 />
               </div>
-              <div className="flex-1">
-                <label htmlFor="last_name" className="block text-sm font-medium text-slate-300">
-                  Last Name
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+                  Password
                 </label>
                 <input
-                  id="last_name"
-                  type="text"
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
                   required
-                  value={formData.last_name}
-                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  placeholder="Enter your last name"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password2" className="block text-sm font-medium text-slate-300">
+                  Confirm Password
+                </label>
+                <input
+                  id="password2"
+                  name="password2"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={formData.password2}
+                  onChange={(e) => setFormData({ ...formData, password2: e.target.value })}
+                  className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="••••••••"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="Enter your email"
-              />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white ${
+                  isLoading
+                    ? 'bg-blue-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                }`}
+              >
+                {isLoading ? 'Creating account...' : 'Create account'}
+              </button>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="Create a password"
-              />
+            <div className="text-center">
+              <p className="text-sm text-slate-400">
+                Already have an account?{' '}
+                <Link
+                  href="/auth/login"
+                  className="font-medium text-blue-500 hover:text-blue-400 transition"
+                >
+                  Sign in here
+                </Link>
+              </p>
             </div>
-
-            <div>
-              <label htmlFor="password2" className="block text-sm font-medium text-slate-300">
-                Confirm Password
-              </label>
-              <input
-                id="password2"
-                type="password"
-                required
-                value={formData.password2}
-                onChange={(e) => setFormData({ ...formData, password2: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="Confirm your password"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              Create Account
-            </button>
           </form>
-
-          <p className="text-center text-sm text-slate-400">
-            Already have an account?{' '}
-            <Link href="/auth/login" className="text-blue-400 hover:text-blue-300">
-              Login here
-            </Link>
-          </p>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,15 +1,27 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useAuthStore } from '@/lib/store/auth';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, User, Compass, MessageCircle, Settings, Heart } from 'lucide-react';
 
 export default function Navigation() {
   const pathname = usePathname();
-  const { isAuthenticated, logout } = useAuthStore();
+  const router = useRouter();
+  const { isAuthenticated, logout } = useAuth();
 
   const isActive = (path: string) => pathname === path;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Still try to redirect to home page
+      router.push('/');
+    }
+  };
 
   // Show minimal navbar for auth pages and home
   if (pathname === '/auth/login' || pathname === '/auth/register' || pathname === '/') {
@@ -47,79 +59,84 @@ export default function Navigation() {
     );
   }
 
-  // Full navbar for authenticated users
+  // Full navbar for authenticated pages
   return (
     <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm fixed w-full top-0 z-50">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link 
-          href="/dashboard" 
+          href="/" 
           className="text-2xl font-bold text-white hover:text-blue-400 transition"
         >
           NoSwipe
         </Link>
-        
+
         <div className="flex items-center space-x-6">
           <Link
-            href="/matches"
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition ${
-              isActive('/matches') 
-                ? 'bg-blue-600 text-white' 
-                : 'hover:bg-slate-800 text-slate-300'
-            }`}
-          >
-            <Heart size={20} />
-            <span className="hidden sm:inline">Matches</span>
-          </Link>
-          <Link
             href="/explore"
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition ${
-              isActive('/explore') 
-                ? 'bg-blue-600 text-white' 
-                : 'hover:bg-slate-800 text-slate-300'
+            className={`flex flex-col items-center text-sm ${
+              isActive('/explore')
+                ? 'text-blue-500'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Compass size={20} />
-            <span className="hidden sm:inline">Explore</span>
+            <Compass className="h-6 w-6" />
+            <span>Explore</span>
           </Link>
+
+          <Link
+            href="/matches"
+            className={`flex flex-col items-center text-sm ${
+              isActive('/matches')
+                ? 'text-blue-500'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Heart className="h-6 w-6" />
+            <span>Matches</span>
+          </Link>
+
           <Link
             href="/messages"
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition ${
-              isActive('/messages') 
-                ? 'bg-blue-600 text-white' 
-                : 'hover:bg-slate-800 text-slate-300'
+            className={`flex flex-col items-center text-sm ${
+              isActive('/messages')
+                ? 'text-blue-500'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            <MessageCircle size={20} />
-            <span className="hidden sm:inline">Messages</span>
+            <MessageCircle className="h-6 w-6" />
+            <span>Messages</span>
           </Link>
+
           <Link
             href="/profile"
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition ${
-              isActive('/profile') 
-                ? 'bg-blue-600 text-white' 
-                : 'hover:bg-slate-800 text-slate-300'
+            className={`flex flex-col items-center text-sm ${
+              isActive('/profile')
+                ? 'text-blue-500'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            <User size={20} />
-            <span className="hidden sm:inline">Profile</span>
+            <User className="h-6 w-6" />
+            <span>Profile</span>
           </Link>
+
           <Link
             href="/settings"
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition ${
-              isActive('/settings') 
-                ? 'bg-blue-600 text-white' 
-                : 'hover:bg-slate-800 text-slate-300'
+            className={`flex flex-col items-center text-sm ${
+              isActive('/settings')
+                ? 'text-blue-500'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Settings size={20} />
-            <span className="hidden sm:inline">Settings</span>
+            <Settings className="h-6 w-6" />
+            <span>Settings</span>
           </Link>
+
           <button
-            onClick={() => logout()}
-            className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition"
+            onClick={handleLogout}
+            className="flex flex-col items-center text-sm text-slate-400 hover:text-white"
           >
-            <LogOut size={20} />
-            <span className="hidden sm:inline">Logout</span>
+            <LogOut className="h-6 w-6" />
+            <span>Logout</span>
           </button>
         </div>
       </div>

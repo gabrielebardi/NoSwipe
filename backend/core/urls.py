@@ -2,6 +2,7 @@
 
 from django.urls import path
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterView,
     LoginView,
@@ -14,9 +15,9 @@ from .views import (
     PhotoViewSet,
     MatchViewSet,
     CalibrationView,
-    CsrfTokenView,
     CalibrationPhotosView,
     PhotoRatingView,
+    UserPhotoView,
 )
 
 router = DefaultRouter()
@@ -29,12 +30,15 @@ urlpatterns = [
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
+    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     
     # User endpoints
     path('user/details/', UserDetailsView.as_view(), name='user-details'),
     path('user/preferences/', UserPreferencesView.as_view(), name='user-preferences'),
     path('user/onboarding-status/', OnboardingStatusView.as_view(), name='onboarding-status'),
     path('user/calibrate/', CalibrationView.as_view(), name='calibrate'),
+    path('user/photos/', UserPhotoView.as_view(), name='user-photos'),
+    path('user/photos/<int:photo_id>/', UserPhotoView.as_view(), name='user-photo-detail'),
     
     # Location endpoints
     path('locations/search/', LocationSearchView.as_view(), name='location-search'),
@@ -42,7 +46,4 @@ urlpatterns = [
     # Calibration endpoints
     path('photos/calibration/', CalibrationPhotosView.as_view(), name='calibration-photos'),
     path('photos/rate/', PhotoRatingView.as_view(), name='photo-rating'),
-    
-    # CSRF token endpoint
-    path('csrf/', CsrfTokenView.as_view(), name='csrf-token'),
 ] + router.urls

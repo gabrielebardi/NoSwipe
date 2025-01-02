@@ -3,14 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthStore } from '@/lib/store/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { apiService } from '@/lib/api';
 import Navigation from '@/components/layout/Navigation';
-import { OnboardingStatus } from '@/types';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuthStore();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -25,20 +24,9 @@ export default function LoginPage() {
 
     try {
       console.log('Attempting login...'); // Debug log
-      const { user } = await login(formData.email, formData.password);
-      console.log('Login successful, user data:', user); // Debug log
-      
-      // Simple check: if calibration is not completed, go to onboarding
-      if (!user.calibration_completed) {
-        console.log('User needs onboarding, redirecting...'); // Debug log
-        router.push('/onboarding');
-        return;
-      }
-
-      // If calibration is completed, go to dashboard
-      console.log('User completed onboarding, redirecting to dashboard...'); // Debug log
-      router.push('/dashboard');
-      
+      await login(formData.email, formData.password);
+      console.log('Login successful, redirecting...'); // Debug log
+      router.push('/onboarding');
     } catch (err) {
       console.error('Login error:', err); // Debug log
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
@@ -48,16 +36,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <>
       <Navigation />
-      <div className="min-h-screen pt-16 flex items-center justify-center">
-        <div className="max-w-md w-full space-y-8 p-8 bg-slate-800 rounded-xl shadow-lg">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
           <div>
-            <h2 className="text-3xl font-bold text-center text-white">
-              Welcome Back
+            <h2 className="text-center text-3xl font-bold text-white">
+              Welcome back
             </h2>
             <p className="mt-2 text-center text-slate-400">
-              Please sign in to your account
+              Sign in to your account
             </p>
           </div>
 
@@ -67,54 +55,71 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="Enter your email"
-              />
+          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="••••••••"
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="Enter your password"
-              />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white ${
+                  isLoading
+                    ? 'bg-blue-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                }`}
+              >
+                {isLoading ? 'Signing in...' : 'Sign in'}
+              </button>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Signing in...' : 'Sign in'}
-            </button>
+            <div className="text-center">
+              <p className="text-sm text-slate-400">
+                Don't have an account?{' '}
+                <Link
+                  href="/auth/register"
+                  className="font-medium text-blue-500 hover:text-blue-400 transition"
+                >
+                  Register here
+                </Link>
+              </p>
+            </div>
           </form>
-
-          <p className="text-center text-sm text-slate-400">
-            Don't have an account?{' '}
-            <Link href="/auth/register" className="text-blue-400 hover:text-blue-300">
-              Register here
-            </Link>
-          </p>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -3,11 +3,13 @@
 from rest_framework import viewsets, status, views
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.contrib.auth import get_user_model, login
-from django.middleware.csrf import get_token
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.contrib.auth import get_user_model, authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.conf import settings
 import requests
 from datetime import date
+import os
 
 from .models import User, Photo, Match, UserPreference, PhotoRating
 from .serializers import (
@@ -20,19 +22,22 @@ from .serializers import (
 )
 from .ai.ai_models import train_user_model
 
+# Use settings.DEBUG instead of DEBUG directly
+DEBUG = settings.DEBUG
+
 # ViewSets
 class UserViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return User.objects.filter(id=self.request.user.id)
 
 class PhotoViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = Photo.objects.all()
     serializer_class = PhotoSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         gender = self.request.query_params.get('gender', 'all')
@@ -41,124 +46,178 @@ class PhotoViewSet(viewsets.ModelViewSet):
         return Photo.objects.all()
 
 class MatchViewSet(viewsets.ModelViewSet):
-    serializer_class = MatchSerializer
     permission_classes = [IsAuthenticated]
+    serializer_class = MatchSerializer
 
     def get_queryset(self):
         return Match.objects.filter(user=self.request.user)
 
 # Auth Views
 class RegisterView(APIView):
+    permission_classes = [AllowAny]  # Allow unauthenticated access
+    
     def post(self, request):
-        print(f"DEBUG - RegisterView POST - request data: {request.data}")  # Debug print
+        print("DEBUG - Register attempt with data:", request.data)
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            print("DEBUG - RegisterView - serializer is valid")  # Debug print
             user = serializer.save()
+            
+            # Generate tokens
+            refresh = RefreshToken.for_user(user)
+            
             return Response({
                 'user': UserProfileSerializer(user).data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                },
                 'message': 'Registration successful'
-            })
-        print(f"DEBUG - RegisterView - serializer errors: {serializer.errors}")  # Debug print
+            }, status=status.HTTP_201_CREATED)
+            
+        print("DEBUG - Registration validation failed:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]  # Allow unauthenticated access
+
     def post(self, request):
+        print("DEBUG - Login attempt with data:", request.data)
         serializer = LoginSerializer(data=request.data, context={'request': request})
+        
         if serializer.is_valid():
             user = serializer.validated_data['user']
-            # Get the authentication backend
-            backend = 'django.contrib.auth.backends.ModelBackend'
-            login(request, user, backend=backend)
+            print(f"DEBUG - User authenticated successfully: {user.email}")
             
-            # Set session cookie
-            request.session.set_expiry(60 * 60 * 24 * 7)  # 7 days
-            request.session.modified = True
+            # Generate tokens
+            refresh = RefreshToken.for_user(user)
             
-            # Set onboarding cookie based on calibration status
-            response = Response({
+            return Response({
                 'user': UserProfileSerializer(user).data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                },
                 'calibration_completed': user.calibration_completed
             })
             
-            print(f"DEBUG - Setting cookies for user {user.email}:")
-            print(f"DEBUG - calibration_completed: {user.calibration_completed}")
-            
-            response.set_cookie(
-                'onboarding_completed',
-                str(user.calibration_completed).lower(),
-                max_age=60 * 60 * 24 * 7,  # 7 days
-                httponly=False,  # Allow JS access
-                samesite='Lax'
-            )
-            
-            print(f"DEBUG - Cookie set: onboarding_completed={str(user.calibration_completed).lower()}")
-            return response
-            
-        return Response(serializer.errors, status=400)
+        print("DEBUG - Login validation failed:", serializer.errors)
+        return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        request.session.flush()
-        return Response({'message': 'Logged out successfully'})
+        try:
+            # Get refresh token from request data
+            refresh_token = request.data.get('refresh_token')
+            
+            if not refresh_token:
+                return Response(
+                    {'error': 'Refresh token is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Blacklist the refresh token
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            
+            return Response({
+                'message': 'Successfully logged out'
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 # User Profile Views
 class UserDetailsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserProfileSerializer(request.user)
-        return Response(serializer.data)
+        try:
+            serializer = UserProfileSerializer(request.user)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def patch(self, request):
-        print("DEBUG - Updating user details:", request.data)
-        serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
-        if serializer.is_valid():
-            user = serializer.save()
-            print("DEBUG - User details updated successfully:", UserProfileSerializer(user).data)
-            
-            # Check if this update completes the basic info step
-            has_basic_info = all([
-                user.gender,
-                user.birth_date,
-                user.location
-            ])
-            
-            if has_basic_info:
-                print("DEBUG - Basic info step completed")
-            
-            return Response({
-                'user': UserProfileSerializer(user).data,
-                'basic_info_complete': has_basic_info
-            })
-            
-        print("DEBUG - User details update failed:", serializer.errors)
-        return Response(serializer.errors, status=400)
+        try:
+            serializer = UserProfileSerializer(request.user, data=request.data, partial=True)
+            if serializer.is_valid():
+                user = serializer.save()
+                
+                # Check if this update completes the basic info step
+                has_basic_info = all([
+                    user.gender,
+                    user.birth_date,
+                    user.location
+                ])
+                
+                return Response({
+                    'user': UserProfileSerializer(user).data,
+                    'basic_info_complete': has_basic_info
+                })
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class UserPreferencesView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
+            print(f"DEBUG - Getting preferences for user: {request.user.email}")
             preferences = UserPreference.objects.get(user=request.user)
             serializer = UserPreferenceSerializer(preferences)
+            print(f"DEBUG - Retrieved preferences: {serializer.data}")
             return Response(serializer.data)
         except UserPreference.DoesNotExist:
+            print(f"DEBUG - No preferences found for user: {request.user.email}")
             return Response({})
+        except Exception as e:
+            print(f"ERROR - Failed to get preferences: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def patch(self, request):
         try:
-            preferences = UserPreference.objects.get(user=request.user)
-            serializer = UserPreferenceSerializer(preferences, data=request.data, partial=True)
-        except UserPreference.DoesNotExist:
-            serializer = UserPreferenceSerializer(data=request.data)
+            print(f"DEBUG - Updating preferences for user: {request.user.email}")
+            print(f"DEBUG - Received data: {request.data}")
             
-        if serializer.is_valid():
-            preferences = serializer.save(user=request.user)
-            return Response(UserPreferenceSerializer(preferences).data)
-        return Response(serializer.errors, status=400)
+            try:
+                preferences = UserPreference.objects.get(user=request.user)
+                print(f"DEBUG - Found existing preferences")
+                serializer = UserPreferenceSerializer(preferences, data=request.data, partial=True)
+            except UserPreference.DoesNotExist:
+                print(f"DEBUG - Creating new preferences")
+                serializer = UserPreferenceSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                print(f"DEBUG - Preferences data valid: {serializer.validated_data}")
+                preferences = serializer.save(user=request.user)
+                response_data = UserPreferenceSerializer(preferences).data
+                print(f"DEBUG - Preferences updated successfully: {response_data}")
+                return Response(response_data)
+                
+            print(f"DEBUG - Preferences validation failed: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            print(f"ERROR - Failed to update preferences: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class OnboardingStatusView(APIView):
     permission_classes = [IsAuthenticated]
@@ -235,6 +294,8 @@ class OnboardingStatusView(APIView):
 
 # Location Views
 class LocationSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         query = request.GET.get('query', '')
         location_type = request.GET.get('type')
@@ -315,100 +376,161 @@ class CalibrationView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        user = request.user
         try:
             # Train the user model based on their ratings
-            train_user_model(user.id)
+            train_user_model(request.user.id)
             # Mark calibration as completed
-            user.calibration_completed = True
-            user.save()
-            return Response({'status': 'success', 'message': 'Calibration completed and model trained successfully'})
+            request.user.calibration_completed = True
+            request.user.save()
+            return Response({
+                'status': 'success',
+                'message': 'Calibration completed and model trained successfully'
+            })
         except Exception as e:
             return Response(
-                {'status': 'error', 'message': str(e)},
+                {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-# CSRF Token View
-class CsrfTokenView(APIView):
-    def get(self, request):
-        return Response({'csrfToken': get_token(request)})
-
 class CalibrationPhotosView(APIView):
     permission_classes = [IsAuthenticated]
-
+    
     def get(self, request):
-        # Get the user's preferred gender from preferences
         try:
-            user_preferences = request.user.preferences
-            preferred_gender = user_preferences.preferred_gender
+            # Get user's preferences
+            preferences = UserPreference.objects.get(user=request.user)
+            preferred_gender = preferences.preferred_gender
+            
+            if not preferred_gender:
+                return Response(
+                    {'error': 'Preferred gender is required for calibration'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get calibration photos based on preferred gender
+            photos = []
+            for photo_url in Photo.get_calibration_photos(preferred_gender):
+                photo_id = int(os.path.splitext(os.path.basename(photo_url))[0])
+                photos.append({
+                    'id': photo_id,
+                    'image_url': photo_url,
+                    'gender': preferred_gender
+                })
+            
+            return Response({'photos': photos})
         except UserPreference.DoesNotExist:
-            return Response({'detail': 'User preferences not set'}, status=400)
-
-        # Map preference to photo gender
-        gender_map = {
-            'M': 'male',
-            'F': 'female',
-            'B': None  # Will return both
-        }
-        
-        target_gender = gender_map.get(preferred_gender)
-        if not target_gender and preferred_gender != 'B':
-            return Response({'detail': 'Invalid gender preference'}, status=400)
-
-        # Get all photos from the Photo model based on gender
-        if target_gender:
-            photos = Photo.objects.filter(gender=preferred_gender).order_by('?')[:10]
-        else:
-            # For 'Both' preference, get 5 photos of each gender
-            male_photos = Photo.objects.filter(gender='M').order_by('?')[:5]
-            female_photos = Photo.objects.filter(gender='F').order_by('?')[:5]
-            photos = list(male_photos) + list(female_photos)
-
-        serializer = PhotoSerializer(photos, many=True)
-        return Response(serializer.data)
+            return Response(
+                {'error': 'User preferences not set'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class PhotoRatingView(APIView):
     permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            photo_id = request.data.get('photo_id')
+            rating = request.data.get('rating')
+            
+            # Validate required fields
+            if not photo_id:
+                return Response(
+                    {'error': 'Photo ID is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not rating:
+                return Response(
+                    {'error': 'Rating is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                photo = Photo.objects.get(id=photo_id)
+            except Photo.DoesNotExist:
+                return Response(
+                    {'error': 'Photo not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Create or update the rating
+            photo_rating, created = PhotoRating.objects.get_or_create(
+                user=request.user,
+                photo=photo,
+                defaults={'rating': rating}
+            )
+            
+            if not created:
+                photo_rating.rating = rating
+                photo_rating.save()
+            
+            return Response({
+                'status': 'success',
+                'message': 'Rating saved successfully'
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UserPhotoView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        photo_id = request.data.get('photo_id')
-        rating = request.data.get('rating')
-
-        if not photo_id or not rating:
+        if 'photo' not in request.FILES:
             return Response(
-                {'detail': 'Both photo_id and rating are required'},
+                {'detail': 'No photo file provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            rating = int(rating)
-            if not (1 <= rating <= 5):
-                raise ValueError('Rating must be between 1 and 5')
-        except ValueError:
+        # Get the user's current photos count
+        current_photos = Photo.objects.filter(user=request.user).count()
+        if current_photos >= 6:
             return Response(
-                {'detail': 'Rating must be an integer between 1 and 5'},
+                {'detail': 'Maximum number of photos (6) reached'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        photo_file = request.FILES['photo']
+        
+        # Create the photo object
+        photo = Photo.objects.create(
+            user=request.user,
+            image=photo_file,  # Using the new image field
+            is_profile_photo=current_photos == 0  # First photo becomes profile photo
+        )
+
+        # If this is the first photo, set it as the user's profile photo
+        if current_photos == 0:
+            request.user.profile_photo = photo.image_url
+            request.user.save()
+
+        serializer = PhotoSerializer(photo)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+        photos = Photo.objects.filter(user=request.user)
+        serializer = PhotoSerializer(photos, many=True)
+        return Response(serializer.data)
+
+    def delete(self, request, photo_id):
         try:
-            photo = Photo.objects.get(id=photo_id)
+            photo = Photo.objects.get(id=photo_id, user=request.user)
+            
+            # If this was the profile photo, clear the user's profile_photo field
+            if photo.is_profile_photo:
+                request.user.profile_photo = None
+                request.user.save()
+            
+            photo.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
         except Photo.DoesNotExist:
             return Response(
                 {'detail': 'Photo not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-
-        # Create or update the rating
-        rating_obj, created = PhotoRating.objects.update_or_create(
-            user=request.user,
-            photo=photo,
-            defaults={'rating': rating}
-        )
-
-        return Response({
-            'id': rating_obj.id,
-            'photo_id': photo_id,
-            'rating': rating,
-            'created_at': rating_obj.created_at
-        })

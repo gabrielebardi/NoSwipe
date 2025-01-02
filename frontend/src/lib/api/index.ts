@@ -1,283 +1,383 @@
 import axios from 'axios';
-import type { UserProfile, Location } from '@/lib/types';
-import { OnboardingStatus, User, UserPreferences, LocationSearchResult } from '@/types';
+import type { 
+  CalibrationPhoto, 
+  CalibrationResponse, 
+  CalibrationPhotosResponse,
+  RegisterResponse, 
+  LoginResponse, 
+  Location, 
+  User 
+} from '@/types';
 
-interface AuthResponse {
-  user: UserProfile;
-  calibration_completed?: boolean;
-}
-
-interface ApiResponse<T> {
-  data: T;
+interface ApiErrorResponse {
   message?: string;
+  detail?: string;
+  [key: string]: any;
 }
 
-interface ApiError {
-  message: string;
-  errors?: Record<string, string[]>;
+interface TokenResponse {
+  access: string;
+  refresh: string;
 }
 
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+interface OnboardingStatus {
+  status: string;
+  current_step: string;
+  next_step: string | null;
+  steps_completed: {
+    basic_info: boolean;
+    preferences: boolean;
+    calibration: boolean;
+  };
+  missing_fields: {
+    basic_info: Record<string, boolean>;
+    preferences: Record<string, boolean>;
+    calibration: boolean;
+  };
+}
 
-// Request interceptor for API calls
-api.interceptors.request.use(
-  async (config) => {
-    // Only get CSRF token for non-GET requests
-    if (config.method !== 'get') {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/csrf/`, {
-          credentials: 'include',
-        });
-        const data = await response.json();
-        if (config.headers) {
-          config.headers['X-CSRFToken'] = data.csrfToken;
-        }
-      } catch (error) {
-        console.error('Failed to fetch CSRF token:', error);
-      }
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-// Response interceptor
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      // Clear auth state on unauthorized
-      localStorage.removeItem('isAuthenticated');
-      window.location.href = '/auth/login';
-    }
-    return Promise.reject(error);
-  }
-);
+// Token management
+const TOKEN_STORAGE_KEY = 'auth_tokens';
 
-const handleApiError = (error: any) => {
-  if (error.response) {
-    if (error.response.data.detail) {
-      throw new Error(error.response.data.detail);
-    } else if (error.response.data.errors) {
-      const errors = Object.entries(error.response.data.errors)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join(', ');
-      throw new Error(errors);
-    }
-    throw new Error('An error occurred while processing your request');
-  } else if (error.request) {
-    throw new Error('No response received from server');
-  } else {
-    throw new Error('Error setting up the request');
+const getStoredTokens = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const tokens = localStorage.getItem(TOKEN_STORAGE_KEY);
+    return tokens ? JSON.parse(tokens) : null;
+  } catch (error) {
+    console.error('Failed to parse stored tokens:', error);
+    return null;
   }
 };
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || 'An error occurred');
+const setStoredTokens = (tokens: TokenResponse | null) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (tokens) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.error('Failed to store tokens:', error);
   }
-  return data as T;
-}
+};
+
+// Create axios instance
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+});
+
+// Add request interceptor for JWT tokens and CSRF
+api.interceptors.request.use(
+  (config) => {
+    // Add JWT token if available
+    const tokens = getStoredTokens();
+    if (tokens?.access) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${tokens.access}`;
+    }
+    
+    // Add CSRF token for non-GET requests that are not auth endpoints
+    if (config.method !== 'get' && 
+        typeof document !== 'undefined' && 
+        !config.url?.includes('/api/auth/')) {
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1];
+        
+      if (csrfToken) {
+        config.headers = config.headers || {};
+        config.headers['X-CSRFToken'] = csrfToken;
+      }
+    }
+    
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Add response interceptor for token refresh
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Skip token refresh for auth endpoints
+    const isAuthEndpoint = originalRequest.url?.includes('/api/auth/');
+    if (isAuthEndpoint) {
+      // For auth endpoints, return a more specific error
+      const message = error.response?.data?.detail 
+        || error.response?.data?.message
+        || (error.response?.status === 401 ? 'Invalid credentials' : 'Authentication failed');
+      return Promise.reject(new Error(message));
+    }
+    
+    // If error is 401 and we haven't tried to refresh token yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        const tokens = getStoredTokens();
+        if (!tokens?.refresh) {
+          console.log('No refresh token available, clearing tokens');
+          setStoredTokens(null);
+          throw new Error('No refresh token available');
+        }
+        
+        // Try to refresh the token
+        const response = await axios.post<TokenResponse>(
+          `${API_URL}/api/auth/token/refresh/`,
+          { refresh: tokens.refresh },
+          {
+            // Don't use the intercepted instance for refresh
+            baseURL: undefined,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        // Store new tokens
+        const newTokens = response.data;
+        setStoredTokens(newTokens);
+        
+        // Update authorization header
+        originalRequest.headers.Authorization = `Bearer ${newTokens.access}`;
+        
+        // Retry the original request with new token
+        return api(originalRequest);
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+        // If refresh fails, clear tokens and throw error
+        setStoredTokens(null);
+        throw new Error('Session expired. Please login again.');
+      }
+    }
+    
+    // Format error message
+    const message = error.response?.data?.message 
+      || error.response?.data?.detail
+      || error.message
+      || 'An error occurred';
+    
+    return Promise.reject(new Error(message));
+  }
+);
 
 export const apiService = {
-  login: async (email: string, password: string): Promise<AuthResponse> => {
+  // Token management
+  getStoredTokens,
+  setStoredTokens,
+
+  // Auth
+  register: async (data: { email: string; password: string; first_name: string; last_name: string; password2: string }) => {
     try {
-      const response = await api.post<AuthResponse>('/api/auth/login/', { email, password });
-      // Set onboarding cookie based on calibration status
-      if (response.data.user.calibration_completed) {
-        document.cookie = 'onboarding_completed=true; path=/';
+      const response = await api.post<RegisterResponse>('/api/auth/register/', data);
+      
+      // Store tokens from response
+      if (response.data.tokens) {
+        setStoredTokens(response.data.tokens);
       }
+      
       return response.data;
     } catch (error) {
-      throw handleApiError(error);
+      throw error;
     }
   },
 
-  register: async (data: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    password: string;
-    password2: string;
-  }): Promise<AuthResponse> => {
+  login: async (email: string, password: string) => {
     try {
-      const response = await api.post<AuthResponse>('/api/auth/register/', data);
+      const response = await api.post<LoginResponse>('/api/auth/login/', { email, password });
+      
+      // Store tokens from response
+      if (response.data.tokens) {
+        setStoredTokens(response.data.tokens);
+      }
+      
       return response.data;
     } catch (error) {
-      throw handleApiError(error);
+      throw error;
     }
   },
 
   logout: async () => {
     try {
-      await api.post('/api/auth/logout/');
-    } catch (error) {
-      throw handleApiError(error);
+      const tokens = getStoredTokens();
+      if (tokens?.refresh) {
+        await api.post('/api/auth/logout/', { refresh_token: tokens.refresh });
+      }
+    } finally {
+      // Always clear tokens on logout attempt
+      setStoredTokens(null);
     }
   },
 
-  getProfile: async (): Promise<UserProfile> => {
+  // User
+  getProfile: async () => {
+    const response = await api.get<User>('/api/user/details/');
+    return response.data;
+  },
+
+  updateProfile: async (data: Partial<User>) => {
+    const response = await api.patch<User>('/api/user/details/', data);
+    return response.data;
+  },
+
+  updateUserDetails: async (data: Partial<User>) => {
+    console.log('🚀 API: Starting user details update with:', JSON.stringify(data, null, 2));
     try {
-      const response = await api.get<UserProfile>('/api/user/details/');
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error);
+      console.log('📤 API: Sending PATCH request to /api/user/details/');
+      const response = await api.patch<{ user: User; basic_info_complete: boolean }>('/api/user/details/', data);
+      
+      console.log('📥 API: Received response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        data: response.data
+      });
+      
+      if (!response.data) {
+        console.error('❌ API: No data in response');
+        throw new Error('No data received from server');
+      }
+      
+      console.log('✅ API: Successfully updated user details:', response.data.user);
+      return response.data.user;
+    } catch (err) {
+      const error = err as any;
+      console.error('❌ API: Update user details error:', {
+        name: error?.name,
+        message: error?.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        responseData: error?.response?.data,
+        requestData: data,
+        stack: error?.stack
+      });
+      
+      let errorMessage = 'Failed to update profile';
+      
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      console.error('❌ API: Throwing error:', errorMessage);
+      throw new Error(errorMessage);
     }
   },
 
-  updateProfile: async (data: Partial<UserProfile>): Promise<UserProfile> => {
-    try {
-      const response = await api.patch<UserProfile>('/api/user/details/', data);
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error);
-    }
+  // Location
+  searchLocations: async (query: string): Promise<Location[]> => {
+    console.log('API: Searching locations with query:', query);
+    const response = await api.get<Location[]>('/api/locations/search/', {
+      params: { query }
+    });
+    console.log('API: Location search response:', response.data);
+    return response.data;
   },
 
-  fetchMatches: async () => {
+  // Onboarding
+  getOnboardingStatus: async () => {
     try {
-      const response = await api.get('/api/matches/');
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  getOnboardingStatus: async (): Promise<OnboardingStatus> => {
-    try {
+      console.log('📊 API: Getting onboarding status');
       const response = await api.get<OnboardingStatus>('/api/user/onboarding-status/');
+      console.log('📊 API: Onboarding status response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Onboarding status error:', error); // Debug log
-      throw handleApiError(error);
+      console.error('❌ API: Failed to get onboarding status:', error);
+      throw error;
     }
   },
 
+  // User Preferences
+  updatePreferences: async (data: {
+    preferred_gender?: string;
+    preferred_location?: any;
+    preferred_age_min?: number;
+    preferred_age_max?: number;
+  }) => {
+    console.log('🔄 API: Updating user preferences with:', data);
+    try {
+      const response = await api.patch('/api/user/preferences/', data);
+      console.log('✅ API: Preferences updated successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ API: Failed to update preferences:', error);
+      throw error;
+    }
+  },
+
+  // Calibration
   getCalibrationPhotos: async () => {
     try {
-      const response = await api.get('/api/photos/calibration/');
-      return response.data;
+      console.log('📸 API: Getting calibration photos');
+      const response = await api.get<CalibrationPhotosResponse>('/api/photos/calibration/');
+      console.log('📸 API: Raw response:', response);
+      
+      if (!response.data?.photos) {
+        throw new Error('No photos received from calibration endpoint');
+      }
+      
+      const photos = response.data.photos;
+      console.log('📸 API: Processed photos:', photos);
+      
+      // Validate each photo has required fields
+      const validPhotos = photos.filter(photo => {
+        const isValid = photo.id && photo.image_url && photo.gender;
+        if (!isValid) {
+          console.warn('❌ Invalid photo data:', photo);
+        }
+        return isValid;
+      });
+      
+      if (validPhotos.length === 0) {
+        throw new Error('No valid photos available for calibration');
+      }
+      
+      // Sort photos randomly
+      const shuffledPhotos = [...validPhotos].sort(() => Math.random() - 0.5);
+      
+      return shuffledPhotos;
     } catch (error) {
-      throw handleApiError(error);
+      console.error('❌ API: Failed to get calibration photos:', error);
+      throw error;
     }
   },
 
   submitPhotoRating: async (photoId: number, rating: number) => {
     try {
+      console.log('⭐ API: Submitting photo rating:', { photoId, rating });
       const response = await api.post('/api/photos/rate/', { photo_id: photoId, rating });
+      console.log('⭐ API: Rating submitted successfully:', response.data);
       return response.data;
     } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  trainUserModel: async () => {
-    try {
-      const response = await api.post('/api/user/calibrate/train/');
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  updateUserDetails: async (data: {
-    gender: 'M' | 'F' | 'O';
-    birth_date: string;
-    location: any;
-  }): Promise<UserProfile> => {
-    try {
-      console.log('API: Updating user details:', data);
-      const response = await api.patch<UserProfile>('/api/user/details/', data);
-      return response.data;
-    } catch (error) {
-      console.error('API: Failed to update user details:', error);
-      throw handleApiError(error);
-    }
-  },
-
-  updatePreferences: async (data: {
-    preferred_gender: 'M' | 'F' | 'B';
-    preferred_age_min: number;
-    preferred_age_max: number;
-    preferred_location: any;
-    max_distance: number;
-  }): Promise<UserProfile> => {
-    try {
-      const response = await api.patch<UserProfile>('/api/user/preferences/', data);
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error);
-    }
-  },
-
-  searchLocations: async (query: string): Promise<Location[]> => {
-    try {
-      console.log('API: Searching locations with query:', query); // Debug log
-      const response = await api.get<Location[]>('/api/locations/search/', {
-        params: { 
-          query,
-          type: 'city'
-        }
-      });
-      console.log('API: Location search response:', response.data); // Debug log
-      
-      if (!response.data || response.data.length === 0) {
-        console.log('API: No locations found for query:', query);
-        return [];
-      }
-
-      // Transform the response to match our Location type
-      const locations = response.data.map(loc => ({
-        id: loc.id || String(Math.random()), // Ensure we always have an ID
-        type: loc.type || 'city',
-        city: loc.city || loc.name || loc.display_name,
-        region: loc.region || loc.state,
-        country: loc.country,
-        latitude: loc.latitude || loc.lat,
-        longitude: loc.longitude || loc.lon,
-        display_name: loc.display_name || `${loc.city || loc.name}${loc.region ? `, ${loc.region}` : ''}${loc.country ? `, ${loc.country}` : ''}`
-      }));
-      
-      console.log('API: Transformed locations:', locations); // Debug log
-      return locations;
-    } catch (error) {
-      console.error('API: Location search error:', error);
-      if (axios.isAxiosError(error)) {
-        console.error('API: Detailed error:', {
-          status: error.response?.status,
-          data: error.response?.data,
-          config: error.config
-        });
-      }
-      throw new Error(error instanceof Error ? error.message : 'Failed to search locations');
-    }
-  },
-
-  processMatchFeedback: async (matchId: number, action: 'accept' | 'reject'): Promise<void> => {
-    try {
-      await api.post(`/api/matches/${matchId}/feedback/`, { action });
-    } catch (error) {
-      throw handleApiError(error);
+      console.error('❌ API: Failed to submit photo rating:', error);
+      throw error;
     }
   },
 
   completeCalibration: async () => {
     try {
-      const response = await api.post('/api/user/calibrate/');
-      // Set onboarding cookie when calibration is completed
-      document.cookie = 'onboarding_completed=true; path=/';
+      console.log('🎯 API: Completing calibration');
+      const response = await api.post<CalibrationResponse>('/api/user/calibrate/');
+      console.log('🎯 API: Calibration completed successfully:', response.data);
       return response.data;
     } catch (error) {
-      throw handleApiError(error);
+      console.error('❌ API: Failed to complete calibration:', error);
+      throw error;
     }
   },
 };

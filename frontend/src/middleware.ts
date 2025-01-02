@@ -3,13 +3,11 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isAuthenticated = request.cookies.has('sessionid');
   const onboardingCookie = request.cookies.get('onboarding_completed');
   const onboardingCompleted = onboardingCookie?.value === 'true';
 
   // Debug logs
   console.log('DEBUG Middleware - Path:', pathname);
-  console.log('DEBUG Middleware - isAuthenticated:', isAuthenticated);
   console.log('DEBUG Middleware - onboarding cookie:', onboardingCookie);
   console.log('DEBUG Middleware - onboardingCompleted:', onboardingCompleted);
 
@@ -29,43 +27,12 @@ export function middleware(request: NextRequest) {
   const protectedRoutes = ['/dashboard', '/matches', '/messages', '/explore', '/profile', '/settings'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
-  // If user is not authenticated and trying to access a protected route
-  if (!isAuthenticated && !isPublicRoute) {
-    console.log('DEBUG Middleware - Redirecting to login: Not authenticated');
-    return NextResponse.redirect(new URL('/auth/login', request.url));
+  // Always allow access to public routes
+  if (isPublicRoute) {
+    return NextResponse.next();
   }
 
-  // If user is authenticated but hasn't completed onboarding
-  if (isAuthenticated && !onboardingCompleted) {
-    // Allow access to current onboarding step
-    if (isOnboardingRoute) {
-      console.log('DEBUG Middleware - Allowing access to onboarding route');
-      return NextResponse.next();
-    }
-    
-    // For any other route, redirect to the appropriate onboarding step
-    // This will be handled by the onboarding page based on the user's progress
-    if (!pathname.startsWith('/onboarding')) {
-      console.log('DEBUG Middleware - Redirecting to onboarding: Onboarding not completed');
-      return NextResponse.redirect(new URL('/onboarding', request.url));
-    }
-  }
-
-  // If user is authenticated and has completed onboarding
-  if (isAuthenticated && onboardingCompleted) {
-    // Prevent access to onboarding routes if already completed
-    if (isOnboardingRoute) {
-      console.log('DEBUG Middleware - Redirecting to dashboard: Onboarding already completed');
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-  }
-
-  // If user is authenticated and on root path, redirect appropriately
-  if (isAuthenticated && pathname === '/') {
-    console.log('DEBUG Middleware - Redirecting from root path:', onboardingCompleted ? 'to dashboard' : 'to onboarding');
-    return NextResponse.redirect(new URL(onboardingCompleted ? '/dashboard' : '/onboarding', request.url));
-  }
-
+  // For all other routes, let the client-side auth handle it
   return NextResponse.next();
 }
 

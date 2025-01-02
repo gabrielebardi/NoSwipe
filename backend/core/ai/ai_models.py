@@ -60,11 +60,12 @@ def train_user_model(user_id):
     if not ratings:
         print(f"No ratings found for user {user_id}.")
         return
-
+    
     X, y = [], []
     for rating in ratings:
         # Get the full path of the image
-        img_path = os.path.join(settings.BASE_DIR, rating.photo.image_url.lstrip('/'))
+        gender_dir = 'male' if rating.photo.gender == 'M' else 'female'
+        img_path = os.path.join(settings.BASE_DIR, 'static', 'calibration_photos', gender_dir, f"{rating.photo.id:06d}.jpg")
         if not os.path.isfile(img_path):
             print(f"Invalid image file: {img_path}")
             continue

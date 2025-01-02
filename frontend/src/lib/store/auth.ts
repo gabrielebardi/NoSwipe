@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiService } from '@/lib/api';
-import { User, UserProfile } from '@/types';
+import { User } from '@/types';
 
 interface RegisterData {
   first_name: string;
@@ -11,17 +11,17 @@ interface RegisterData {
 }
 
 interface AuthState {
-  user: UserProfile | null;
+  user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<{ user: UserProfile }>;
+  login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
-  updateProfile: (data: Partial<UserProfile>) => Promise<void>;
+  updateProfile: (data: Partial<User>) => Promise<void>;
   setIsAuthenticated: (value: boolean) => void;
-  updateUser: (user: UserProfile) => void;
+  updateUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setIsAuthenticated: (value: boolean) => set({ isAuthenticated: value }),
 
-  updateUser: (user: UserProfile) => set({ user }),
+  updateUser: (user: User) => set({ user }),
 
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
@@ -44,7 +44,6 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: response.user,
         isLoading: false 
       });
-      return { user: response.user };
     } catch (error) {
       localStorage.removeItem('isAuthenticated');
       set({ 
@@ -116,7 +115,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  updateProfile: async (data: Partial<UserProfile>) => {
+  updateProfile: async (data: Partial<User>) => {
     set({ isLoading: true, error: null });
     try {
       const updatedUser = await apiService.updateProfile(data);
