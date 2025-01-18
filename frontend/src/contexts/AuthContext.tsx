@@ -1,9 +1,19 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { User, TokenResponse } from '@/types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { User } from '@/types';
 import { apiService } from '@/lib/api';
+
+interface OnboardingStatus {
+  status: string;
+  current_step: string | null;
+  next_step: string | null;
+  steps_completed: {
+    basic_info: boolean;
+    preferences: boolean;
+    calibration: boolean;
+  };
+}
 
 interface RegisterData {
   email: string;
@@ -17,162 +27,125 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
-  logout: () => Promise<void>;
+  onboardingCompleted: boolean;
+  currentOnboardingStep: string | null;
+  login: (email: string, password: string) => Promise<{ user: User; onboardingStatus: OnboardingStatus }>;
+  register: (data: RegisterData) => Promise<User>;
+  logout: () => void;
+  updateUser: (data: Partial<User>) => Promise<User>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
-// List of public routes that don't require authentication
-const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/register'];
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const router = useRouter();
-  const pathname = usePathname();
+  const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null);
 
-  // Initialize auth state
+  // Initialize auth state from localStorage
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        setIsLoading(true);
-        // Check if we have tokens stored
         const tokens = apiService.getStoredTokens();
-        if (!tokens) {
-          console.log('No tokens found, clearing auth state');
-          setUser(null);
-          setIsInitialized(true);
-          // If on a protected route, redirect to login
-          if (!PUBLIC_ROUTES.includes(pathname)) {
-            router.replace('/auth/login');
-          }
-          return;
-        }
-
-        // Validate token and get user profile
-        try {
-          const response = await apiService.getProfile();
-          console.log('Profile fetched successfully:', response);
-          setUser(response);
-          setIsInitialized(true);
-        } catch (error) {
-          console.error('Failed to fetch profile, clearing auth state:', error);
-          // Clear invalid tokens
-          apiService.setStoredTokens(null);
-          setUser(null);
-          setIsInitialized(true);
-          // If on a protected route, redirect to login
-          if (!PUBLIC_ROUTES.includes(pathname)) {
-            router.replace('/auth/login');
-          }
+        if (tokens) {
+          apiService.setStoredTokens(tokens);
+          const userDetails = await apiService.getProfile();
+          setUser(userDetails);
+          
+          // Fetch onboarding status
+          const status = await apiService.getOnboardingStatus();
+          setOnboardingStatus(status);
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
-        // Clear any invalid state
+        console.error('Failed to initialize auth:', error);
+        // Clear tokens if initialization fails
         apiService.setStoredTokens(null);
         setUser(null);
-        setIsInitialized(true);
-        // If on a protected route, redirect to login
-        if (!PUBLIC_ROUTES.includes(pathname)) {
-          router.replace('/auth/login');
-        }
+        setOnboardingStatus(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeAuth();
-  }, [pathname, router]);
+  }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
-      setIsLoading(true);
-      const response = await apiService.login(email, password);
-      setUser(response.user);
+      const { tokens, user } = await apiService.login(email, password);
+      apiService.setStoredTokens(tokens);
+      setUser(user);
       
-      // Store tokens
-      if (response.tokens) {
-        apiService.setStoredTokens(response.tokens);
-      }
-
-      // Check onboarding status
-      try {
-        const status = await apiService.getOnboardingStatus();
-        if (status.next_step) {
-          router.replace(status.next_step);
-        } else {
-          router.replace('/dashboard');
-        }
-      } catch (error) {
-        console.error('Failed to get onboarding status:', error);
-        router.replace('/onboarding');
-      }
+      // Fetch onboarding status after login
+      const status = await apiService.getOnboardingStatus();
+      setOnboardingStatus(status);
+      
+      // Return both user and onboarding status
+      return { user, onboardingStatus: status };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login failed:', error);
       throw error;
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, []);
 
-  const register = async (data: RegisterData) => {
+  const register = useCallback(async (data: RegisterData) => {
     try {
-      setIsLoading(true);
-      const response = await apiService.register(data);
-      setUser(response.user);
+      const { tokens, user } = await apiService.register(data);
+      apiService.setStoredTokens(tokens);
+      setUser(user);
       
-      // Store tokens
-      if (response.tokens) {
-        apiService.setStoredTokens(response.tokens);
-      }
+      // Fetch initial onboarding status after registration
+      const status = await apiService.getOnboardingStatus();
+      setOnboardingStatus(status);
       
-      router.replace('/onboarding');
+      return user;
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Registration failed:', error);
       throw error;
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(() => {
+    apiService.setStoredTokens(null);
+    setUser(null);
+    setOnboardingStatus(null);
+  }, []);
+
+  const updateUser = useCallback(async (data: Partial<User>) => {
     try {
-      setIsLoading(true);
-      await apiService.logout();
+      const updatedUser = await apiService.updateUserDetails(data);
+      setUser(updatedUser);
+      
+      // Refresh onboarding status after user update
+      const status = await apiService.getOnboardingStatus();
+      setOnboardingStatus(status);
+      
+      return updatedUser;
     } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Always clear local state
-      apiService.setStoredTokens(null);
-      setUser(null);
-      setIsLoading(false);
-      router.replace('/');
+      console.error('Failed to update user:', error);
+      throw error;
     }
+  }, []);
+
+  const value = {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    onboardingCompleted: onboardingStatus?.status === 'complete',
+    currentOnboardingStep: onboardingStatus?.current_step || null,
+    login,
+    register,
+    logout,
+    updateUser,
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: isInitialized && !!user && !!apiService.getStoredTokens(),
-        isLoading,
-        login,
-        register,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 } 

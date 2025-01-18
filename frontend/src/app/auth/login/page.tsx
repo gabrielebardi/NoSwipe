@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiService } from '@/lib/api';
 import Navigation from '@/components/layout/Navigation';
 
 export default function LoginPage() {
@@ -24,9 +23,20 @@ export default function LoginPage() {
 
     try {
       console.log('Attempting login...'); // Debug log
-      await login(formData.email, formData.password);
-      console.log('Login successful, redirecting...'); // Debug log
-      router.push('/onboarding');
+      const { user, onboardingStatus } = await login(formData.email, formData.password);
+      console.log('Login successful:', { user, onboardingStatus }); // Debug log
+      
+      if (onboardingStatus.status !== 'complete') {
+        let nextRoute = '/onboarding';
+        if (onboardingStatus.current_step === 'calibration') {
+          nextRoute = '/calibration';
+        }
+        console.log('Onboarding not completed, redirecting to:', nextRoute); // Debug log
+        router.push(nextRoute);
+      } else {
+        console.log('Onboarding completed, redirecting to dashboard...'); // Debug log
+        router.push('/dashboard');
+      }
     } catch (err) {
       console.error('Login error:', err); // Debug log
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');

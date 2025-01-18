@@ -1,89 +1,137 @@
-# Onboarding Process
+# NoSwipe Onboarding Process
 
 ## Overview
-The onboarding process is a crucial part of the user experience, designed to gather essential information about new users and their preferences. This process consists of several steps that must be completed in sequence.
+
+The onboarding process is designed to collect essential user information and preferences to enable accurate matching. The process is sequential and must be completed before accessing the main application features.
 
 ## Steps
 
 ### 1. Basic Information
-- First name
-- Last name
-- Birth date
-- Gender (M/F/B)
-- Location
-- Bio (optional)
+- **Email Verification**
+  - User receives verification email after registration
+  - Must verify email before proceeding
+- **Personal Details**
+  - First name and last name
+  - Gender selection (M/F/B)
+  - Birth date (with 18+ verification)
+  - Location (city/town search)
 
-### 2. Preferences
-Users specify their preferences for potential matches:
-- Preferred gender(s):
-  - Male (M)
-  - Female (F)
-  - Both (B)
-  Note: When "Both" is selected, the calibration phase will provide a balanced 50/50 distribution of male and female photos.
-- Age range (minimum and maximum)
-- Preferred location
-- Maximum distance (in kilometers/miles)
+### 2. Partner Preferences
+- **Basic Preferences**
+  - Preferred gender(s)
+  - Age range
+  - Location preferences (distance range)
+- **Interest Rating** (In Development)
+  - 15 key traits assessment
+  - Scale: 1-5 rating for each trait
+  - Importance weighting for each trait
 
-### 3. Calibration
-The calibration phase helps the system understand the user's preferences through photo ratings:
-- Users are presented with a series of photos to rate (1-5 stars)
-- Photos are selected based on the user's gender preference:
-  - If preference is Male or Female: shows photos of the selected gender
-  - If preference is Both: shows an equal distribution (50/50) of male and female photos
-- Each photo must be rated before proceeding
-- Minimum number of photos required: 10
-- Photos are pre-selected to represent a diverse range of appearances
+### 3. Photo Calibration
+- **Photo Upload**
+  - Profile photo selection
+  - Additional photos (up to 5)
+  - Photo guidelines and verification
+- **Preference Learning**
+  - Rate sample photos (minimum 10)
+  - AI model training based on ratings
+  - Preference pattern analysis
 
-### 4. Completion
-- All steps must be completed in sequence
-- Progress is saved after each step
-- Users can return to complete remaining steps if interrupted
-- Upon completion, users are directed to their personalized dashboard
+### 4. Interest Assessment (In Development)
+- **Self Assessment**
+  - Rate personal traits (15 key areas)
+  - Scale: 1-5 for each trait
+  - Optional trait descriptions
+- **Partner Preferences**
+  - Rate importance of each trait
+  - Specify acceptable ranges
+  - Set deal-breakers
+
+## Validation Rules
+
+### Basic Information
+- Email must be verified
+- Age must be 18+
+- Location must be valid city/town
+- First and last name required
+
+### Photos
+- At least one profile photo required
+- Maximum 6 photos total
+- Photos must meet content guidelines
+- No explicit content allowed
+
+### Preferences
+- Must specify at least one gender preference
+- Age range must be reasonable (18-100)
+- Location range must be set
+
+### Calibration
+- Minimum 10 photo ratings required
+- Ratings must show consistent patterns
+- Multiple random checks for quality
 
 ## Technical Implementation
 
+### Frontend Routes
+```typescript
+/onboarding           # Basic information
+/onboarding/photos    # Photo upload
+/onboarding/preferences  # Partner preferences
+/onboarding/calibration  # Photo calibration
+```
+
 ### API Endpoints
-- GET `/api/user/onboarding-status/` - Check current onboarding status
-- PATCH `/api/user/basic-info/` - Update basic information
-- PATCH `/api/user/preferences/` - Update preferences
-- GET `/api/photos/calibration/` - Get calibration photos
-- POST `/api/photos/{id}/rate/` - Submit photo rating
-- POST `/api/calibration/complete/` - Mark calibration as complete
+```http
+POST   /api/user/details/
+PATCH  /api/user/preferences/
+POST   /api/user/photos/
+GET    /api/photos/calibration/
+POST   /api/photos/rate/
+POST   /api/calibration/complete/
+GET    /api/user/onboarding-status/
+```
 
-### Data Validation
-- Age must be 18+
-- Location must be a valid place
-- Preferences must be within reasonable ranges
-- All required fields must be completed
-
-### Photo Management
-- Calibration photos are stored in gender-specific directories
-- Photos are served through Django's static files system
-- Equal distribution is maintained for users interested in both genders
-- Photos are pre-processed and optimized for web delivery
+### State Management
+- Progress tracking per section
+- Validation state for each field
+- Error handling and display
+- Progress persistence
 
 ## Error Handling
-- Validation errors are clearly communicated
-- Progress is saved to prevent data loss
-- Users can retry failed steps
-- Network errors are handled gracefully
 
-## Security
-- All endpoints require authentication
-- Data is validated server-side
-- Personal information is encrypted
-- Rate limiting is implemented on API endpoints
+### Validation Errors
+- Immediate field validation
+- Form-level validation
+- Server-side validation
+- Clear error messages
 
-## User Experience
-- Clear progress indication
-- Intuitive navigation
-- Helpful error messages
-- Smooth transitions between steps
-- Mobile-responsive design
+### Technical Errors
+- API error handling
+- Photo upload retry logic
+- Progress auto-save
+- Session management
 
-## Testing
-- Unit tests for all components
-- Integration tests for the complete flow
-- Edge case handling
-- Performance testing for photo loading
-- Cross-browser compatibility testing 
+## Security Measures
+
+- Rate limiting on all endpoints
+- Photo content verification
+- Data validation
+- CSRF protection
+- Secure cookie handling
+
+## Future Enhancements
+
+1. **Smart Photo Analysis**
+   - Automatic face detection
+   - Photo quality assessment
+   - Content moderation
+
+2. **Enhanced Preference Learning**
+   - Machine learning model improvements
+   - Better pattern recognition
+   - More accurate matches
+
+3. **Progressive Profiling**
+   - Gradual information collection
+   - Dynamic preference updates
+   - Behavioral analysis 

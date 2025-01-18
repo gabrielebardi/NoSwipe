@@ -1,4 +1,52 @@
-# API Documentation
+# NoSwipe API Documentation
+
+API Version: v1
+Base URL: `http://localhost:8000/api`
+
+## API Conventions
+
+### Versioning
+The API version is included in the response headers:
+```http
+X-API-Version: v1
+```
+
+### Rate Limiting
+To ensure service stability, the API implements rate limiting:
+- Authentication endpoints: 5 requests per minute
+- User operations: 60 requests per minute
+- Photo operations: 30 requests per minute
+
+Rate limit headers in responses:
+```http
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 59
+X-RateLimit-Reset: 1640995200
+```
+
+### Security Headers
+All responses include the following security headers:
+```http
+Content-Security-Policy: default-src 'self'
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+### Pagination
+List endpoints support pagination with the following query parameters:
+- `page`: Page number (default: 1)
+- `page_size`: Items per page (default: 10, max: 50)
+
+Example response:
+```json
+{
+  "count": 100,
+  "next": "http://localhost:8000/api/endpoint/?page=3",
+  "previous": "http://localhost:8000/api/endpoint/?page=1",
+  "results": []
+}
+```
 
 ## Authentication
 
@@ -231,9 +279,16 @@ Authorization: Bearer your.access.token
 Response (200 OK):
 {
   "photos": [
-    "url_to_photo_1",
-    "url_to_photo_2",
-    "url_to_photo_3"
+    {
+      "id": 1,
+      "image_url": "url_to_photo_1",
+      "gender": "F"
+    },
+    {
+      "id": 2,
+      "image_url": "url_to_photo_2",
+      "gender": "F"
+    }
   ]
 }
 ```
@@ -245,7 +300,7 @@ Authorization: Bearer your.access.token
 Content-Type: application/json
 
 {
-  "photo_url": "url_to_photo",
+  "photo_id": 1,
   "rating": 5
 }
 
@@ -258,7 +313,7 @@ Response (200 OK):
 
 ### Complete Calibration
 ```http
-POST /api/user/calibrate/
+POST /api/calibration/complete/
 Authorization: Bearer your.access.token
 
 Response (200 OK):
@@ -272,7 +327,7 @@ Response (200 OK):
 
 ### Search Locations
 ```http
-GET /api/locations/search/?query=New York
+GET /api/locations/search/?query=Zurich
 Authorization: Bearer your.access.token
 
 Response (200 OK):
@@ -280,23 +335,129 @@ Response (200 OK):
   {
     "id": "123",
     "type": "city",
-    "city": "New York",
-    "region": "New York",
-    "country": "United States",
-    "latitude": 40.7128,
-    "longitude": -74.0060,
-    "display_name": "New York, United States"
+    "city": "Zurich",
+    "region": "Zurich",
+    "country": "Switzerland",
+    "latitude": 47.3769,
+    "longitude": 8.5417,
+    "display_name": "Zurich, Switzerland"
   }
 ]
+```
+
+## User Photos
+
+### Upload Photo
+```http
+POST /api/user/photos/
+Authorization: Bearer your.access.token
+Content-Type: multipart/form-data
+
+{
+  "photo": [binary_file]
+}
+
+Response (201 Created):
+{
+  "id": 1,
+  "image_url": "url_to_photo",
+  "is_profile_photo": true
+}
+```
+
+### Get User Photos
+```http
+GET /api/user/photos/
+Authorization: Bearer your.access.token
+
+Response (200 OK):
+[
+  {
+    "id": 1,
+    "image_url": "url_to_photo_1",
+    "is_profile_photo": true
+  },
+  {
+    "id": 2,
+    "image_url": "url_to_photo_2",
+    "is_profile_photo": false
+  }
+]
+```
+
+### Delete Photo
+```http
+DELETE /api/user/photos/{photo_id}/
+Authorization: Bearer your.access.token
+
+Response (204 No Content)
+```
+
+## Health Check
+
+### Check API Status
+```http
+GET /api/health/
+Response (200 OK):
+{
+  "status": "healthy"
+}
 ```
 
 ## Error Handling
 
 All endpoints follow a consistent error response format:
 
+### Validation Errors (400 Bad Request)
 ```json
 {
-  "error": "Descriptive error message"
+  "errors": {
+    "field_name": [
+      "Error message for the field"
+    ]
+  }
+}
+```
+
+### Authentication Errors (401 Unauthorized)
+```json
+{
+  "error": "Invalid credentials",
+  "code": "invalid_credentials"
+}
+```
+
+### Permission Errors (403 Forbidden)
+```json
+{
+  "error": "You do not have permission to perform this action",
+  "code": "permission_denied"
+}
+```
+
+### Not Found Errors (404 Not Found)
+```json
+{
+  "error": "Requested resource not found",
+  "code": "not_found"
+}
+```
+
+### Rate Limit Errors (429 Too Many Requests)
+```json
+{
+  "error": "Rate limit exceeded",
+  "code": "rate_limit_exceeded",
+  "retry_after": 60
+}
+```
+
+### Server Errors (500 Internal Server Error)
+```json
+{
+  "error": "An unexpected error occurred",
+  "code": "internal_server_error",
+  "request_id": "req_123abc"
 }
 ```
 
@@ -307,4 +468,5 @@ Common HTTP status codes:
 - 401: Unauthorized
 - 403: Forbidden
 - 404: Not Found
+- 429: Too Many Requests
 - 500: Internal Server Error 

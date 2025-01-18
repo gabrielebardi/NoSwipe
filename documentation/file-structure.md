@@ -16,23 +16,22 @@ backend/
 │   ├── settings.py     # Project settings
 │   ├── urls.py        # Main URL configuration
 │   └── wsgi.py        # WSGI configuration
-│
 ├── core/              # Main Django app
 │   ├── __init__.py
 │   ├── admin.py       # Admin interface configuration
 │   ├── apps.py        # App configuration
 │   ├── models.py      # Database models
 │   ├── serializers.py # REST framework serializers
-│   ├── urls.py        # App URL patterns
-│   ├── views.py       # View logic
-│   ├── authentication_backends.py  # Custom auth
+│   ├── views.py       # API views and logic
+│   ├── urls.py        # App URL routing
+│   ├── throttling.py  # Rate limiting configuration
+│   ├── ai/            # AI functionality
+│   │   └── ai_models.py  # AI model training and prediction
 │   └── management/    # Custom management commands
 │       └── commands/
 │           └── load_calibration_photos.py
-│
 ├── media/            # User uploaded files
 │   └── user_<id>/    # User-specific media
-│
 ├── static/           # Static files
 ├── staticfiles/      # Collected static files
 ├── user_models/      # AI model storage
@@ -46,34 +45,58 @@ backend/
 ```
 frontend/
 ├── src/
-│   ├── app/          # Next.js app directory
-│   │   ├── globals.css  # Global styles
-│   │   ├── auth/     # Authentication pages
-│   │   ├── onboarding/  # Onboarding flow
-│   │   ├── profile/    # Profile management
-│   │   └── dashboard/  # User dashboard
-│   │
-│   ├── components/   # Reusable React components
-│   ├── lib/         # Utilities and services
-│   │   ├── api/     # API integration
-│   │   └── store/   # State management
-│   │
-│   └── types/       # TypeScript definitions
-│
-├── public/          # Static assets
-├── node_modules/    # Node.js dependencies
-├── .next/          # Next.js build output
-├── package.json    # Node.js dependencies and scripts
-└── .env.local      # Environment variables
+│   ├── app/                    # Next.js App Router pages
+│   │   ├── globals.css        # Global styles
+│   │   ├── layout.tsx        # Root layout
+│   │   ├── page.tsx         # Landing page
+│   │   ├── not-found.tsx    # 404 page
+│   │   ├── auth/            # Authentication pages
+│   │   │   ├── login/      # Login page
+│   │   │   └── register/   # Registration page
+│   │   ├── onboarding/     # Onboarding flow
+│   │   │   ├── page.tsx   # Basic info
+│   │   │   ├── location-search.tsx  # Location search
+│   │   │   └── preferences/ # Preferences page
+│   │   ├── calibration/    # Photo calibration
+│   │   ├── profile/        # User profile
+│   │   └── dashboard/      # Main dashboard
+│   ├── components/          # Reusable components
+│   │   ├── ErrorBoundary.tsx  # Error handling
+│   │   ├── ProtectedRoute.tsx # Auth protection
+│   │   ├── ClientLayout.tsx   # Client-side layout
+│   │   ├── layout/         # Layout components
+│   │   │   └── Navigation.tsx  # Main navigation
+│   │   └── providers/      # Context providers
+│   │       └── AuthProvider.tsx  # Authentication state
+│   ├── lib/                 # Utilities and services
+│   │   ├── api/            # API service
+│   │   │   └── index.ts   # API client configuration
+│   │   ├── store/          # State management
+│   │   ├── types/          # TypeScript type definitions
+│   │   └── utils/          # Utility functions
+│   │       └── urls.ts    # URL handling utilities
+│   └── middleware.ts        # Next.js middleware
+├── public/                  # Static assets
+│   └── images/             # Image assets
+├── tailwind.config.ts      # Tailwind CSS configuration
+├── postcss.config.mjs      # PostCSS configuration
+├── next.config.js          # Next.js configuration
+├── tsconfig.json           # TypeScript configuration
+├── package.json            # Dependencies and scripts
+└── .env.local             # Environment variables
 ```
 
 ## Documentation Structure
 ```
 documentation/
-├── MVP_steps.md     # MVP development steps
-├── progress.md      # Development progress tracking
-├── roadmap.md       # Project roadmap
-└── file_structure.md  # This file structure documentation
+├── api-docs.md          # API documentation
+├── backend-structure.md # Backend architecture
+├── frontend-structure.md # Frontend architecture
+├── file-structure.md    # This file
+├── app_flow.md         # Application flow
+├── MVP_steps.md        # MVP development steps
+├── progress.md         # Development progress
+└── roadmap.md          # Project roadmap
 ```
 
 ## Important Files and Their Purposes
@@ -84,15 +107,19 @@ documentation/
 - `core/views.py`: API endpoints and business logic
 - `core/urls.py`: API routing
 - `core/serializers.py`: Data serialization/deserialization
+- `core/throttling.py`: Rate limiting configuration
+- `core/ai/ai_models.py`: AI model training and prediction
 - `requirements.txt`: Python package dependencies
 
 ### Frontend Key Files
 - `src/app/layout.tsx`: Root layout component
+- `src/middleware.ts`: Auth and routing middleware
 - `src/lib/api/index.ts`: API service integration
 - `src/lib/store/auth.ts`: Authentication state management
-- `src/types/index.ts`: TypeScript type definitions
-- `package.json`: Node.js dependencies and scripts
-- `.env.local`: Frontend environment variables
+- `src/lib/types/index.ts`: TypeScript type definitions
+- `next.config.js`: Next.js configuration
+- `tailwind.config.ts`: Styling configuration
+- `package.json`: Dependencies and scripts
 
 ## File Naming Conventions
 
@@ -121,6 +148,4 @@ documentation/
 - `backend/staticfiles/`: Generated by Django's collectstatic
 - `frontend/.next/`: Generated by Next.js build
 - `backend/media/`: Generated when users upload files
-- `__pycache__/`: Python bytecode cache directories
-
-This structure should be maintained for consistency and to avoid duplicate or misplaced files. 
+- `__pycache__/`: Python bytecode cache directories 

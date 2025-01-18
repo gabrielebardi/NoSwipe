@@ -1,220 +1,141 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/api';
 import { LocationSearch } from '../location-search';
-import type { Location } from '@/lib/types';
+import type { Location, UserPreferences } from '@/types';
 
 export default function PreferencesPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    preferred_gender: '',
-    preferred_age_min: '18',
-    preferred_age_max: '99',
-    preferred_location: null as Location | null,
+  const [formData, setFormData] = useState<UserPreferences>({
+    preferred_gender: 'B',
+    preferred_age_min: 18,
+    preferred_age_max: 50,
+    max_distance: 5,
+    preferred_location: null,
   });
-
-  // Validation state
-  const [isValid, setIsValid] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-
-  const genderOptions = [
-    { value: 'M', label: 'Male' },
-    { value: 'F', label: 'Female' },
-    { value: 'B', label: 'Both' }
-  ];
-
-  // Validate form data
-  useEffect(() => {
-    const errors: string[] = [];
-    
-    if (!formData.preferred_gender) {
-      errors.push('Please select your gender preference');
-    }
-
-    const minAge = parseInt(formData.preferred_age_min);
-    const maxAge = parseInt(formData.preferred_age_max);
-
-    if (!formData.preferred_age_min || isNaN(minAge)) {
-      errors.push('Please set minimum age');
-    } else if (minAge < 18) {
-      errors.push('Minimum age must be at least 18');
-    }
-
-    if (!formData.preferred_age_max || isNaN(maxAge)) {
-      errors.push('Please set maximum age');
-    } else if (maxAge > 100) {
-      errors.push('Maximum age cannot exceed 100');
-    }
-
-    if (minAge && maxAge && minAge > maxAge) {
-      errors.push('Minimum age cannot be greater than maximum age');
-    }
-
-    if (!formData.preferred_location) {
-      errors.push('Please select your preferred location');
-    }
-    
-    setValidationErrors(errors);
-    setIsValid(errors.length === 0);
-  }, [formData]);
-
-  const handleAgeChange = (field: 'preferred_age_min' | 'preferred_age_max', value: string) => {
-    // Allow empty string for backspace/delete
-    if (value === '') {
-      setFormData(prev => ({
-        ...prev,
-        [field]: ''
-      }));
-      return;
-    }
-
-    // Only allow numbers
-    if (!/^\d+$/.test(value)) return;
-
-    const numValue = parseInt(value, 10);
-    
-    // Allow any number input, validation will handle the range
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid) return;
-
-    setIsLoading(true);
     setError(null);
+    setIsLoading(true);
 
     try {
-      const minAge = parseInt(formData.preferred_age_min);
-      const maxAge = parseInt(formData.preferred_age_max);
-
-      if (isNaN(minAge) || isNaN(maxAge) || minAge > maxAge) {
-        throw new Error('Invalid age range');
-      }
-
-      await apiService.updatePreferences({
-        preferred_gender: formData.preferred_gender,
-        preferred_age_min: minAge,
-        preferred_age_max: maxAge,
-        preferred_location: formData.preferred_location,
-      });
-
-      const status = await apiService.getOnboardingStatus();
-      router.push(status.next_step || '/dashboard');
+      await apiService.updatePreferences(formData);
+      router.push('/onboarding/calibration');
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to update preferences. Please check your inputs and try again.');
-      }
+      setError(err instanceof Error ? err.message : 'Failed to update preferences');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleLocationSelect = (location: Location | null) => {
+    setFormData((prev: UserPreferences) => ({
+      ...prev,
+      preferred_location: location
+    }));
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold mb-8">Your Preferences</h1>
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Gender Preference */}
-        <div>
-          <label className="block text-xl mb-4">Interested In</label>
-          <select
-            value={formData.preferred_gender}
-            onChange={(e) => setFormData({ ...formData, preferred_gender: e.target.value })}
-            className="w-full p-3 rounded bg-slate-700 border border-gray-600 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="">Select gender preference</option>
-            {genderOptions.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
+    <div className="min-h-screen bg-slate-900">
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          <h1 className="text-3xl font-bold text-white mb-8">Your Preferences</h1>
+          
+          {error && (
+            <div className="bg-red-500/10 border border-red-500 text-red-500 rounded-lg p-4 mb-6">
+              {error}
+            </div>
+          )}
 
-        {/* Age Range */}
-        <div>
-          <label className="block text-xl mb-4">Age Range</label>
-          <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="preferred_age_min" className="block text-sm font-medium text-gray-300 mb-2">
-                Minimum Age
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Interested in
+              </label>
+              <select
+                value={formData.preferred_gender}
+                onChange={(e) => setFormData((prev: UserPreferences) => ({
+                  ...prev,
+                  preferred_gender: e.target.value as 'M' | 'F' | 'B'
+                }))}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+              >
+                <option value="B">Both</option>
+                <option value="M">Men</option>
+                <option value="F">Women</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Age Range
+              </label>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="number"
+                  value={formData.preferred_age_min ?? 18}
+                  onChange={(e) => setFormData((prev: UserPreferences) => ({
+                    ...prev,
+                    preferred_age_min: parseInt(e.target.value)
+                  }))}
+                  min="18"
+                  max="99"
+                  className="w-24 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                />
+                <span className="text-slate-300">to</span>
+                <input
+                  type="number"
+                  value={formData.preferred_age_max ?? 50}
+                  onChange={(e) => setFormData((prev: UserPreferences) => ({
+                    ...prev,
+                    preferred_age_max: parseInt(e.target.value)
+                  }))}
+                  min="18"
+                  max="99"
+                  className="w-24 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Maximum Distance (km)
               </label>
               <input
-                type="text"
-                inputMode="numeric"
-                pattern="\d*"
-                id="preferred_age_min"
-                value={formData.preferred_age_min}
-                onChange={(e) => handleAgeChange('preferred_age_min', e.target.value)}
-                className="w-full p-3 rounded bg-slate-700 border border-gray-600 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="18"
+                type="number"
+                value={formData.max_distance}
+                onChange={(e) => setFormData((prev: UserPreferences) => ({
+                  ...prev,
+                  max_distance: parseInt(e.target.value)
+                }))}
+                min="1"
+                max="500"
+                className="w-24 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white"
               />
             </div>
 
             <div>
-              <label htmlFor="preferred_age_max" className="block text-sm font-medium text-gray-300 mb-2">
-                Maximum Age
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Preferred Location
               </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="\d*"
-                id="preferred_age_max"
-                value={formData.preferred_age_max}
-                onChange={(e) => handleAgeChange('preferred_age_max', e.target.value)}
-                className="w-full p-3 rounded bg-slate-700 border border-gray-600 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="99"
-              />
+              <LocationSearch onSelect={handleLocationSelect} />
             </div>
-          </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isLoading ? 'Saving...' : 'Continue'}
+            </button>
+          </form>
         </div>
-
-        {/* Location */}
-        <div>
-          <label className="block text-xl mb-4">Preferred Location</label>
-          <LocationSearch
-            onSelect={(location: Location) => setFormData({ ...formData, preferred_location: location })}
-            defaultValue={formData.preferred_location?.display_name}
-          />
-        </div>
-
-        {/* Validation Errors */}
-        {validationErrors.length > 0 && (
-          <div className="bg-red-500/10 border border-red-500 rounded-lg p-4">
-            {validationErrors.map((error, index) => (
-              <p key={index} className="text-red-500">{error}</p>
-            ))}
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-500/10 border border-red-500 rounded-lg p-4">
-            <p className="text-red-500">{error}</p>
-          </div>
-        )}
-
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={!isValid || isLoading}
-          className={`w-full p-4 rounded-lg text-xl font-semibold transition-colors ${
-            isValid && !isLoading
-              ? 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900'
-              : 'bg-gray-600 cursor-not-allowed'
-          }`}
-        >
-          {isLoading ? 'Loading...' : 'Continue to Calibration'}
-        </button>
-      </form>
+      </div>
     </div>
   );
 } 

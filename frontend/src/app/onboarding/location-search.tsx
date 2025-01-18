@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
-import { Location } from '@/lib/types';
+import { Location } from '@/types';
 import { apiService } from '@/lib/api';
 import { debounce } from 'lodash';
 
@@ -10,6 +10,33 @@ interface LocationSearchProps {
   onSelect: (location: Location) => void;
   defaultValue?: string;
 }
+
+const searchLocations = async (
+  searchQuery: string,
+  setLocations: (locations: Location[]) => void,
+  setLoading: (loading: boolean) => void,
+  setError: (error: string | null) => void
+) => {
+  if (!searchQuery.trim()) {
+    setLocations([]);
+    return;
+  }
+
+  setLoading(true);
+  setError(null);
+
+  try {
+    const results = await apiService.searchLocations(searchQuery);
+    setLocations(results);
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'Failed to search locations');
+    setLocations([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const debouncedSearchLocations = debounce(searchLocations, 300);
 
 export function LocationSearch({ onSelect, defaultValue = 'Zürich, Zürich, Schweiz/Suisse/Svizzera/Svizra' }: LocationSearchProps) {
   const [query, setQuery] = useState(defaultValue);
@@ -20,52 +47,10 @@ export function LocationSearch({ onSelect, defaultValue = 'Zürich, Zürich, Sch
   const searchRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
 
-  const searchLocations = useCallback(
-    debounce(async (searchQuery: string) => {
-      console.log('🔍 Starting location search for:', searchQuery);
-      if (!searchQuery.trim()) {
-        console.log('Empty search query, clearing results');
-        setLocations([]);
-        setError(null);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        console.log('Calling API searchLocations with query:', searchQuery);
-        const results = await apiService.searchLocations(searchQuery);
-        console.log('API Response:', {
-          resultsLength: results?.length || 0,
-          firstResult: results?.[0],
-          isArray: Array.isArray(results),
-          results
-        });
-        
-        if (!Array.isArray(results) || results.length === 0) {
-          console.log('No results found for query:', searchQuery);
-          setError('No cities found matching your search');
-          setLocations([]);
-        } else {
-          console.log('Found', results.length, 'locations:', 
-            results.map(l => `${l.city || l.display_name}, ${l.region || ''}, ${l.country || ''}`));
-          setLocations(results);
-          setError(null);
-        }
-        setShowResults(true);
-      } catch (err) {
-        console.error('Search error details:', {
-          error: err,
-          message: err instanceof Error ? err.message : 'Unknown error',
-          query: searchQuery
-        });
-        setError('Failed to search locations. Please try again.');
-        setLocations([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 300),
+  const debouncedSearch = useCallback(
+    (searchQuery: string) => {
+      debouncedSearchLocations(searchQuery, setLocations, setLoading, setError);
+    },
     []
   );
 
@@ -90,10 +75,10 @@ export function LocationSearch({ onSelect, defaultValue = 'Zürich, Zürich, Sch
         }]);
       } else {
         // For other default values, perform a search
-        searchLocations(defaultValue);
+        debouncedSearch(defaultValue);
       }
     }
-  }, [defaultValue, searchLocations]);
+  }, [defaultValue, debouncedSearch]);
 
   // Handle clicks outside of the search component
   useEffect(() => {
@@ -115,14 +100,14 @@ export function LocationSearch({ onSelect, defaultValue = 'Zürich, Zürich, Sch
     });
     
     if (query.length >= 2) {
-      searchLocations(query);
+      debouncedSearch(query);
     } else {
       console.log('Query too short, clearing results');
       setLocations([]);
       setShowResults(false);
       setError(null);
     }
-  }, [query, searchLocations]);
+  }, [query, debouncedSearch]);
 
   const handleSelect = (location: Location) => {
     console.log('Location selected:', {

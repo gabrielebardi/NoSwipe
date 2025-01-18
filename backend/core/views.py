@@ -21,6 +21,7 @@ from .serializers import (
     UserPreferenceSerializer
 )
 from .ai.ai_models import train_user_model
+from .throttling import AuthRateThrottle
 
 # Use settings.DEBUG instead of DEBUG directly
 DEBUG = settings.DEBUG
@@ -55,6 +56,7 @@ class MatchViewSet(viewsets.ModelViewSet):
 # Auth Views
 class RegisterView(APIView):
     permission_classes = [AllowAny]  # Allow unauthenticated access
+    throttle_classes = [AuthRateThrottle]  # Add rate limiting
     
     def post(self, request):
         print("DEBUG - Register attempt with data:", request.data)
@@ -79,6 +81,7 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]  # Allow unauthenticated access
+    throttle_classes = [AuthRateThrottle]  # Add rate limiting
 
     def post(self, request):
         print("DEBUG - Login attempt with data:", request.data)

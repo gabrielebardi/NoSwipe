@@ -27,14 +27,28 @@ backend/
 │   ├── urls.py           # Main URL routing
 │   └── wsgi.py           # WSGI configuration
 ├── core/                   # Main application
-│   ├── models/           # Database models
-│   ├── serializers/      # API serializers
-│   ├── views/            # API views
-│   ├── urls.py          # App URL routing
-│   └── admin.py         # Admin interface
+│   ├── __init__.py       # Package initialization
+│   ├── admin.py          # Admin interface configuration
+│   ├── apps.py           # App configuration
+│   ├── models.py         # Database models
+│   ├── serializers.py    # API serializers
+│   ├── views.py          # API views and logic
+│   ├── urls.py           # App URL routing
+│   ├── throttling.py     # Rate limiting configuration
+│   ├── ai/               # AI functionality
+│   │   └── ai_models.py  # AI model training and prediction
+│   └── management/       # Custom management commands
+│       └── commands/
+│           └── load_calibration_photos.py
 ├── media/                  # User uploaded files
+│   └── user_<id>/         # User-specific media
 ├── static/                 # Static files
-└── requirements.txt        # Python dependencies
+├── staticfiles/           # Collected static files
+├── user_models/           # AI model storage
+├── env/                   # Virtual environment
+├── requirements.txt       # Python dependencies
+├── manage.py             # Django management script
+└── .env                  # Environment variables
 ```
 
 ## Authentication

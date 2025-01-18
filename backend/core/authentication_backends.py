@@ -7,16 +7,29 @@ User = get_user_model()
 
 class EmailBackend(ModelBackend):
     """
-    Custom authentication backend to allow login with email and password.
+    Custom authentication backend to allow login with email/username and password.
     """
-    def authenticate(self, request, email=None, password=None, **kwargs):
+    def authenticate(self, request, username=None, password=None, email=None, **kwargs):
         try:
-            print(f"DEBUG - EmailBackend authenticate - email: {email}")
+            # Handle both username and email authentication
+            if email is None:
+                email = username  # Try using username as email for admin login
+                
+            print(f"DEBUG - EmailBackend authenticate - email/username: {email}")
             if not email:
                 return None
                 
             # Get user by email
-            user = User.objects.get(email=email)
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                # If user not found by email, try username
+                try:
+                    user = User.objects.get(username=email)
+                except User.DoesNotExist:
+                    print(f"DEBUG - No user found with email/username: {email}")
+                    return None
+                    
             print(f"DEBUG - Found user: {user.email}")
             
             # Check password
@@ -27,9 +40,6 @@ class EmailBackend(ModelBackend):
                 print("DEBUG - Password check failed")
                 return None
                 
-        except User.DoesNotExist:
-            print(f"DEBUG - No user found with email: {email}")
-            return None
         except Exception as e:
             print(f"DEBUG - Authentication error: {str(e)}")
             return None

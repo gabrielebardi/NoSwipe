@@ -11,6 +11,7 @@ export interface User {
   date_joined: string;
   last_login?: string;
   calibration_completed: boolean;
+  profile_photo?: string;
 }
 
 export interface TokenResponse {
@@ -47,6 +48,9 @@ export interface CalibrationPhoto {
   image_url: string;
   gender: 'M' | 'F' | 'B';
   age?: number;
+  ethnicity?: string;
+  features?: Record<string, number>;
+  created_at?: string;
 }
 
 export interface CalibrationResponse {
@@ -68,8 +72,28 @@ export interface ApiResponse<T> {
 export interface ApiError {
   message: string;
   errors?: Record<string, string[]>;
+  detail?: string;
+  [key: string]: string | Record<string, string[]> | undefined;
 }
 
 export interface CalibrationPhotosResponse {
   photos: CalibrationPhoto[];
+}
+
+export interface UserPreferences {
+  preferred_gender: 'M' | 'F' | 'B';
+  preferred_location: Location | null;
+  preferred_age_min: number | null;
+  preferred_age_max: number | null;
+  max_distance: number;
+}
+
+export interface Match {
+  id: number;
+  user: User;
+  matched_user: User;
+  status: 'P' | 'A' | 'R';
+  compatibility_score: number;
+  created_at: string;
+  updated_at: string;
 }

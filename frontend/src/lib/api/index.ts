@@ -1,18 +1,20 @@
 import axios from 'axios';
+import Cookies from 'js-cookie';
 import type { 
-  CalibrationPhoto, 
+  CalibrationPhoto as _CalibrationPhoto, 
   CalibrationResponse, 
   CalibrationPhotosResponse,
   RegisterResponse, 
   LoginResponse, 
   Location, 
-  User 
+  User,
+  UserPreferences
 } from '@/types';
 
-interface ApiErrorResponse {
+interface _ApiErrorResponse {
   message?: string;
   detail?: string;
-  [key: string]: any;
+  [key: string]: string | undefined;
 }
 
 interface TokenResponse {
@@ -40,11 +42,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Token management
 const TOKEN_STORAGE_KEY = 'auth_tokens';
+const ONBOARDING_STATUS_KEY = 'onboarding_status';
 
 const getStoredTokens = () => {
-  if (typeof window === 'undefined') return null;
   try {
-    const tokens = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const tokens = Cookies.get(TOKEN_STORAGE_KEY);
     return tokens ? JSON.parse(tokens) : null;
   } catch (error) {
     console.error('Failed to parse stored tokens:', error);
@@ -53,15 +55,30 @@ const getStoredTokens = () => {
 };
 
 const setStoredTokens = (tokens: TokenResponse | null) => {
-  if (typeof window === 'undefined') return;
   try {
     if (tokens) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
+      Cookies.set(TOKEN_STORAGE_KEY, JSON.stringify(tokens), { 
+        expires: 7, // 7 days
+        path: '/',
+        sameSite: 'strict'
+      });
     } else {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      Cookies.remove(TOKEN_STORAGE_KEY, { path: '/' });
     }
   } catch (error) {
     console.error('Failed to store tokens:', error);
+  }
+};
+
+const setOnboardingStatus = (status: OnboardingStatus) => {
+  try {
+    Cookies.set(ONBOARDING_STATUS_KEY, JSON.stringify(status), {
+      expires: 7,
+      path: '/',
+      sameSite: 'strict'
+    });
+  } catch (error) {
+    console.error('Failed to store onboarding status:', error);
   }
 };
 
@@ -196,15 +213,23 @@ export const apiService = {
 
   login: async (email: string, password: string) => {
     try {
+      console.log('🔑 API: Attempting login with:', { email });
       const response = await api.post<LoginResponse>('/api/auth/login/', { email, password });
+      console.log('🔑 API: Login response:', response.data);
       
       // Store tokens from response
       if (response.data.tokens) {
         setStoredTokens(response.data.tokens);
       }
       
+      // Get and store onboarding status
+      const onboardingResponse = await api.get<OnboardingStatus>('/api/user/onboarding-status/');
+      console.log('🔑 API: Onboarding status:', onboardingResponse.data);
+      setOnboardingStatus(onboardingResponse.data);
+      
       return response.data;
     } catch (error) {
+      console.error('🔑 API: Login failed:', error);
       throw error;
     }
   },
@@ -252,30 +277,15 @@ export const apiService = {
       
       console.log('✅ API: Successfully updated user details:', response.data.user);
       return response.data.user;
-    } catch (err) {
-      const error = err as any;
-      console.error('❌ API: Update user details error:', {
-        name: error?.name,
-        message: error?.message,
-        status: error?.response?.status,
-        statusText: error?.response?.statusText,
-        responseData: error?.response?.data,
-        requestData: data,
-        stack: error?.stack
-      });
-      
-      let errorMessage = 'Failed to update profile';
-      
-      if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error?.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error?.message) {
-        errorMessage = error.message;
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('❌ API: Update user details error:', {
+          name: err.name,
+          message: err.message,
+        });
+        throw err;
       }
-      
-      console.error('❌ API: Throwing error:', errorMessage);
-      throw new Error(errorMessage);
+      throw new Error('An unknown error occurred while updating user details');
     }
   },
 
@@ -291,33 +301,16 @@ export const apiService = {
 
   // Onboarding
   getOnboardingStatus: async () => {
-    try {
-      console.log('📊 API: Getting onboarding status');
-      const response = await api.get<OnboardingStatus>('/api/user/onboarding-status/');
-      console.log('📊 API: Onboarding status response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ API: Failed to get onboarding status:', error);
-      throw error;
-    }
+    const response = await api.get<OnboardingStatus>('/api/user/onboarding-status/');
+    setOnboardingStatus(response.data);
+    return response.data;
   },
 
   // User Preferences
-  updatePreferences: async (data: {
-    preferred_gender?: string;
-    preferred_location?: any;
-    preferred_age_min?: number;
-    preferred_age_max?: number;
-  }) => {
-    console.log('🔄 API: Updating user preferences with:', data);
-    try {
-      const response = await api.patch('/api/user/preferences/', data);
-      console.log('✅ API: Preferences updated successfully:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ API: Failed to update preferences:', error);
-      throw error;
-    }
+  updatePreferences: async (preferences: UserPreferences) => {
+    console.log('🚀 API: Updating user preferences:', JSON.stringify(preferences, null, 2));
+    const response = await api.patch<{ user: User; preferences_complete: boolean }>('/api/user/preferences/', preferences);
+    return response.data;
   },
 
   // Calibration
@@ -375,9 +368,19 @@ export const apiService = {
       const response = await api.post<CalibrationResponse>('/api/user/calibrate/');
       console.log('🎯 API: Calibration completed successfully:', response.data);
       return response.data;
-    } catch (error) {
-      console.error('❌ API: Failed to complete calibration:', error);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('❌ API: Failed to complete calibration:', err);
+        throw err;
+      }
+      throw new Error('An unknown error occurred during calibration');
+    }
+  },
+
+  handleError(error: unknown): never {
+    if (error instanceof Error) {
       throw error;
     }
+    throw new Error('An unknown error occurred');
   },
 };

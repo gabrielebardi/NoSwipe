@@ -9,11 +9,8 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-// List of public routes that don't require authentication
+// Public routes that don't require authentication
 const PUBLIC_ROUTES = ['/', '/auth/login', '/auth/register'];
-
-// Onboarding flow routes in order
-const ONBOARDING_ROUTES = ['/onboarding', '/onboarding/preferences', '/calibration'];
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();

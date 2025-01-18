@@ -4,16 +4,24 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/api';
 import { LocationSearch } from './location-search';
-import type { Location } from '@/types';
+import type { Location, UserPreferences } from '@/types';
+
+interface FormData {
+  preferred_gender: string;
+  preferred_age_min: string;
+  preferred_age_max: string;
+  preferred_location: Location | null;
+  max_distance: string;
+}
 
 export default function PreferencesPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     preferred_gender: '',
     preferred_age_min: '18',
     preferred_age_max: '65',
-    preferred_location: null as Location | null,
+    preferred_location: null,
     max_distance: '50',
   });
   const [error, setError] = useState<string | null>(null);
@@ -30,13 +38,14 @@ export default function PreferencesPage() {
     setIsLoading(true);
 
     try {
-      await apiService.updatePreferences({
+      const preferences: UserPreferences = {
         preferred_gender: formData.preferred_gender as 'M' | 'F' | 'B',
-        preferred_age_min: parseInt(formData.preferred_age_min),
-        preferred_age_max: parseInt(formData.preferred_age_max),
+        preferred_age_min: parseInt(formData.preferred_age_min.toString()),
+        preferred_age_max: parseInt(formData.preferred_age_max.toString()),
         preferred_location: formData.preferred_location,
-        max_distance: parseInt(formData.max_distance),
-      });
+        max_distance: parseInt(formData.max_distance.toString()),
+      };
+      await apiService.updatePreferences(preferences);
       router.push('/calibration');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update preferences');
@@ -145,7 +154,6 @@ export default function PreferencesPage() {
                       setFormData({ ...formData, preferred_location: location });
                       setStep(4);
                     }}
-                    selected={formData.preferred_location}
                   />
                 </div>
 

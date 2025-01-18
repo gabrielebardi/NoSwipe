@@ -57,3 +57,6 @@ __pycache__/
 *.venv
 env/
 venv/
+
+# Documentation Local folder
+documentation/Local/
