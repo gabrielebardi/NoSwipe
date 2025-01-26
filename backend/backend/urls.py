@@ -20,10 +20,15 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse
+
+def home_view(request):
+    return HttpResponse("Welcome to NoSwipe!")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('core.urls')),  # This will prefix all core.urls with 'api/'
+    path('', home_view),  # Add this to respond to the root URL
 ]
 
 # Serve static files in development
