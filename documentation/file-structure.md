@@ -5,6 +5,12 @@
 noswipe-app/
 ├── backend/             # Django backend
 ├── frontend/           # Next.js frontend
+├── .gitignore          # Git ignore file
+├── .env                # Environment variables
+├── package.json        # Node.js dependencies
+├── package-lock.json   # Node.js dependencies lock file
+├── Procfile            # Gunicorn configuration
+├── render.yaml         # Render deployment configuration
 └── documentation/      # Project documentation
 ```
 
