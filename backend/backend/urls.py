@@ -20,14 +20,18 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 
 def home_view(request):
     return HttpResponse("Welcome to NoSwipe!")
 
+def health_check(request):
+    return JsonResponse({'status': 'ok'})
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('core.urls')),  # This will prefix all core.urls with 'api/'
+    path('api/health-check/', health_check, name='health-check'),
     path('', home_view),  # Add this to respond to the root URL
 ]
 

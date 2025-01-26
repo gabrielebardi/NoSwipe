@@ -38,7 +38,7 @@ interface OnboardingStatus {
   };
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://noswipe.onrender.com/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://noswipe.onrender.com';
 
 // Token management
 const TOKEN_STORAGE_KEY = 'auth_tokens';
