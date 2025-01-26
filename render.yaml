@@ -16,6 +16,8 @@ services:
             value: "noswipe.onrender.com"
           - key: PORT
             value: "8000"
+          - key: CSRF_TRUSTED_ORIGINS
+            value: "https://noswipe.onrender.com"
       - type: web
         name: static
         env: static

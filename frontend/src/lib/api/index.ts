@@ -38,7 +38,7 @@ interface OnboardingStatus {
   };
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://noswipe.onrender.com/api';
 
 // Token management
 const TOKEN_STORAGE_KEY = 'auth_tokens';
@@ -89,6 +89,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+  withCredentials: true,  // Ensure cookies are sent with requests
 });
 
 // Add request interceptor for JWT tokens and CSRF
