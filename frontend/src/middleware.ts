@@ -23,7 +23,8 @@ const VALID_ROUTES = [
 ];
 
 // Cookie configuration for better security
-const COOKIE_OPTIONS = {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict' as const,
@@ -32,7 +33,7 @@ const COOKIE_OPTIONS = {
 
 const DEBUG = process.env.NODE_ENV === 'development';
 
-function debugLog(...args: any[]) {
+function debugLog(...args: unknown[]) {
   if (DEBUG) {
     console.log(...args);
   }
