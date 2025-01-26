@@ -30,6 +30,9 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# Get the port from the environment variable or use 8000 by default (for local testing)
+PORT = os.getenv('PORT', '8000')
+
 # API Keys
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 AZURE_COMPUTER_VISION_KEY = os.getenv('AZURE_COMPUTER_VISION_KEY')
