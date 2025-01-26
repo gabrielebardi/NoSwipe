@@ -1,9 +1,20 @@
+-r requirements.txt
+
+# AI and ML (macOS-specific)
+tensorflow-macos==2.16.2
+tensorflow-metal==1.1.0
+
+# Testing
 pytest==8.3.4
 pytest-django==4.9.0
 pytest-cov==6.0.0
+
+# Formatting
 black==24.10.0
 flake8==7.1.1
 isort==5.12.0
 coverage==7.6.10
 mypy==1.9.0
+
+# Debugging
 django-debug-toolbar==4.3.0
