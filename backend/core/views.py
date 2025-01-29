@@ -1,4 +1,4 @@
-# /Users/gb/Desktop/Code/noswipe-app/backend/core/views.py
+# /Users/gb/Code/NoSwipe/backend/core/views.py
 
 from rest_framework import viewsets, status, views
 from rest_framework.views import APIView

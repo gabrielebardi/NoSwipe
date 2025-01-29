@@ -1,4 +1,4 @@
-# /Users/gb/Desktop/Code/noswipe-app/backend/core/urls.py
+# /Users/gb/Code/NoSwipe/backend/core/urls.py
 
 from django.urls import path
 from rest_framework.routers import DefaultRouter

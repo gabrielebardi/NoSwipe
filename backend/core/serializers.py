@@ -1,4 +1,4 @@
-# /Users/gb/Desktop/Code/noswipe-app/backend/core/serializers.py
+# /Users/gb/Code/NoSwipe/backend/core/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.password_validation import validate_password
